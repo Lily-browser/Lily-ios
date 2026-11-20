@@ -1,39 +1,46 @@
 import SwiftUI
 
-/// The Mac's floating command bar: a blurred card over a dimmed window with the field on top and
-/// matching tabs and the search action below.
+/// The Mac's floating command bar: a card over a dimmed window with the field on top and matching
+/// tabs and the search action below. Dismisses with a tap outside, the VoiceOver escape gesture or Go.
 struct CommandBar: View {
-    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let model: BrowserModel
     let dismiss: () -> Void
     @State private var text = ""
     @FocusState private var focused: Bool
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.opacity(0.28).ignoresSafeArea().onTapGesture(perform: dismiss)
+            Color.black.opacity(0.28).ignoresSafeArea().onTapGesture(perform: dismiss).accessibilityHidden(true)
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .medium)).foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").font(.title3.weight(.medium)).foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField("Search or enter address", text: $text)
-                        .font(.system(size: 19, weight: .medium))
+                        .font(.title3.weight(.medium))
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .keyboardType(.webSearch).submitLabel(.go)
                         .focused($focused)
                         .onSubmit(open)
+                    if !text.isEmpty {
+                        Button { text = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).accessibilityLabel("Clear text")
+                    }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 14)
+                .padding(.leading, 16).padding(.trailing, text.isEmpty ? 16 : 4).padding(.vertical, text.isEmpty ? 14 : 2)
                 let rows = results
                 if !rows.isEmpty {
                     Divider().padding(.horizontal, 12)
                     VStack(spacing: 2) { ForEach(rows) { row in resultRow(row) } }.padding(8)
                 }
             }
-            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.28), radius: 30, y: 14)
+            .chrome(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
             .padding(.horizontal, 14).padding(.top, 70)
+            .accessibilityAddTraits(.isModal)
         }
+        .accessibilityAction(.escape, dismiss)
         .onAppear { focused = true }
     }
 
@@ -64,20 +71,21 @@ struct CommandBar: View {
                 if let tab = row.tab { SiteBadge(tab: tab, size: 24) }
                 else { Image(systemName: row.symbol ?? "globe").frame(width: 24, height: 24).foregroundStyle(Color(hex: accentHex)) }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(row.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
+                    Text(row.title).font(.subheadline.weight(.medium)).lineLimit(1)
                     if let subtitle = row.subtitle, !subtitle.isEmpty {
-                        Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 Spacer()
-                if row.tab == nil { Image(systemName: "return").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary) }
+                if row.tab == nil { Image(systemName: "return").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityHidden(true) }
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
+            .padding(.horizontal, 10).frame(minHeight: 44)
             .background(row.id == "go" ? AnyShapeStyle(Color(hex: accentHex).opacity(0.14)) : AnyShapeStyle(.clear),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint(row.tab == nil ? "Searches or opens the address" : "Switches to this tab")
     }
 
     private func open() {

@@ -4,10 +4,11 @@ struct BrowserView: View {
     @Bindable var model: BrowserModel
     @State private var web = WebController()
     @State private var snapshots = SnapshotCache()
-    @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
-    @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @State private var showingCommandBar = false
     @State private var showingSidebar = false
+    @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
+    @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -19,15 +20,16 @@ struct BrowserView: View {
             .padding(.horizontal, 8)
             .padding(.top, 4)
             .padding(.bottom, 6)
+            .accessibilityHidden(showingCommandBar)
             if showingCommandBar {
                 CommandBar(model: model) { showingCommandBar = false }
-                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .opacity))
                     .zIndex(1)
             }
         }
         .tint(Color(hex: accent))
         .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
-        .animation(.smooth(duration: 0.22), value: showingCommandBar)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: showingCommandBar)
         .sheet(isPresented: $showingSidebar) {
             TabOverview(model: model, snapshots: snapshots) { showingSidebar = false }
                 .presentationDetents([.large])
@@ -51,21 +53,20 @@ struct BrowserView: View {
         .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
     }
 
-    private var bottomBar: some View {
+    /// One glass group (iOS 26+): the buttons and the address pill share a container so they blend and
+    /// morph together instead of stacking separate blurs.
+    @ViewBuilder private var bottomBar: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) { barContent }
+        } else {
+            barContent
+        }
+    }
+
+    private var barContent: some View {
         HStack(spacing: 8) {
             barButton("chevron.left", "Back", enabled: web.canGoBack) { web.goBack() }
-            Button { showingCommandBar = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: model.active.url == nil ? "magnifyingglass" : "lock.fill").font(.system(size: 12, weight: .semibold))
-                    Text(model.active.shortAddress.isEmpty ? "Search or enter address" : model.active.shortAddress)
-                        .font(.system(size: 15, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                }
-                .foregroundStyle(model.active.url == nil ? .secondary : .primary)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
+            addressPill
             barButton("square.on.square", "Tabs and spaces", enabled: true) {
                 Task {
                     if let image = await web.snapshot() { snapshots.set(image, for: model.activeID) }
@@ -76,30 +77,57 @@ struct BrowserView: View {
         }
     }
 
-    private func barButton(_ symbol: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
-                .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    private var addressPill: some View {
+        Button { showingCommandBar = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: model.active.url == nil ? "magnifyingglass" : "lock.fill").font(.caption.weight(.semibold))
+                Text(model.active.shortAddress.isEmpty ? "Search or enter address" : model.active.shortAddress)
+                    .font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.middle)
+            }
+            .foregroundStyle(model.active.url == nil ? .secondary : .primary)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .chrome(Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
+        .accessibilityLabel(model.active.shortAddress.isEmpty ? "Search or enter address" : "Address, \(model.active.shortAddress)")
+        .accessibilityHint("Opens the search field")
+        .contextMenu {
+            if let url = model.active.url {
+                ShareLink(item: url)
+                Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
+                Button("Reload", systemImage: "arrow.clockwise") { web.reload() }
+            }
+        }
+    }
+
+    private func barButton(_ symbol: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.callout.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .chrome(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.6))
         .disabled(!enabled)
         .accessibilityLabel(label)
     }
 }
 
 private struct StartPage: View {
-    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let space: Space
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
+    @ScaledMetric(relativeTo: .largeTitle) private var leaf: CGFloat = 54
+
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "leaf.fill").font(.system(size: 54)).foregroundStyle(Color(hex: accentHex))
+            Image(systemName: "leaf.fill").font(.system(size: leaf)).foregroundStyle(Color(hex: accentHex)).accessibilityHidden(true)
             Text("Lily").font(.largeTitle.weight(.semibold))
             Label(space.name, systemImage: space.symbol)
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: space.colorHex))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -1,59 +1,86 @@
 import SwiftUI
 
 /// The tab system for a small screen: pinned tabs in a strip, the rest as page cards in a grid,
-/// spaces along the bottom. Tap a card to switch, ✕ to close, long-press for more.
+/// spaces along the bottom. Tap a card to switch, ✕ to close, long-press (or VoiceOver actions) for more.
 struct TabOverview: View {
-    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let model: BrowserModel
     let snapshots: SnapshotCache
     let dismiss: () -> Void
     @State private var showingSettings = false
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
+    @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = 150
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(spacing: 14) {
-                    if !model.pinnedTabs.isEmpty { pinnedStrip }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        ForEach(model.regularTabs) { tab in
-                            TabCard(tab: tab, image: snapshots.images[tab.id], active: tab.id == model.activeID,
-                                    close: { snapshots.remove(tab.id); model.close(tab.id) })
-                                .onTapGesture { model.select(tab.id); dismiss() }
-                                .contextMenu {
-                                    Button("Pin", systemImage: "pin") { model.togglePin(tab.id) }
-                                    Button("Close Other Tabs", systemImage: "xmark.square") { model.closeOthers(keeping: tab.id) }
-                                    Button("Close", systemImage: "xmark", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) }
-                                }
+        ZStack(alignment: .bottom) {
+            SpaceBackdrop(colorHex: model.currentSpace.colorHex)
+            VStack(spacing: 0) {
+                header
+                ScrollView {
+                    VStack(spacing: 14) {
+                        if !model.pinnedTabs.isEmpty { pinnedStrip }
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                            ForEach(model.regularTabs) { tab in card(for: tab) }
+                            newTabCard
                         }
-                        Button { model.newTab(); dismiss() } label: {
-                            Label("New Tab", systemImage: "plus").font(.system(size: 16, weight: .medium)).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, minHeight: 150)
-                                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 14).padding(.bottom, 84) // room for the floating space switcher
                 }
-                .padding(.horizontal, 14).padding(.bottom, 12)
             }
-            spaceSwitcher
+            spaceSwitcher.padding(.bottom, 8)
         }
-        .background(SpaceBackdrop(colorHex: model.currentSpace.colorHex))
         .sheet(isPresented: $showingSettings) { SettingsView(model: model, snapshots: snapshots) }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: model.currentSpace.symbol).font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color(hex: model.currentSpace.colorHex))
-            Text(model.currentSpace.name).font(.system(size: 17, weight: .semibold))
-            Text("\(model.pinnedTabs.count + model.regularTabs.count)").font(.system(size: 14)).foregroundStyle(.secondary)
+            Label {
+                Text(model.currentSpace.name).font(.headline)
+            } icon: {
+                Image(systemName: model.currentSpace.symbol).foregroundStyle(Color(hex: model.currentSpace.colorHex))
+            }
+            Text("\(model.pinnedTabs.count + model.regularTabs.count)").font(.subheadline).foregroundStyle(.secondary)
+                .accessibilityLabel("\(model.pinnedTabs.count + model.regularTabs.count) tabs")
             Spacer()
-            Button { showingSettings = true } label: { Image(systemName: "gearshape").font(.system(size: 17)) }
-                .accessibilityLabel("Settings")
-            Button("Done", action: dismiss).font(.system(size: 16, weight: .semibold)).padding(.leading, 6)
+            Button { showingSettings = true } label: {
+                Image(systemName: "gearshape").frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Settings")
+            Button("Done", action: dismiss).font(.body.weight(.semibold)).frame(minHeight: 44)
         }
-        .padding(.horizontal, 18).padding(.top, 22).padding(.bottom, 12)
+        .padding(.horizontal, 18).padding(.top, 14)
+    }
+
+    private func card(for tab: TabItem) -> some View {
+        let active = tab.id == model.activeID
+        return ZStack(alignment: .topTrailing) {
+            Button { model.select(tab.id); dismiss() } label: {
+                TabCard(tab: tab, image: snapshots.images[tab.id], active: active, accentHex: accentHex, height: cardHeight)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(tab.displayTitle)
+            .accessibilityAddTraits(active ? .isSelected : [])
+            Button { snapshots.remove(tab.id); model.close(tab.id) } label: {
+                Image(systemName: "xmark").font(.caption2.weight(.bold)).padding(6)
+                    .background(.quaternary, in: Circle())
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).padding(.top, -6).padding(.trailing, -6)
+            .accessibilityLabel("Close \(tab.displayTitle)")
+        }
+        .contextMenu {
+            Button("Pin", systemImage: "pin") { model.togglePin(tab.id) }
+            Button("Close Other Tabs", systemImage: "xmark.square") { model.closeOthers(keeping: tab.id) }
+            Button("Close", systemImage: "xmark", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) }
+        }
+    }
+
+    private var newTabCard: some View {
+        Button { model.newTab(); dismiss() } label: {
+            Label("New Tab", systemImage: "plus").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: cardHeight)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var pinnedStrip: some View {
@@ -61,48 +88,56 @@ struct TabOverview: View {
             HStack(spacing: 8) {
                 ForEach(model.pinnedTabs) { tab in
                     let active = tab.id == model.activeID
-                    HStack(spacing: 8) {
-                        SiteBadge(tab: tab, size: 22)
-                        Text(tab.displayTitle).font(.system(size: 14, weight: .medium)).lineLimit(1).frame(maxWidth: 110)
+                    Button { model.select(tab.id); dismiss() } label: {
+                        HStack(spacing: 8) {
+                            SiteBadge(tab: tab, size: 24)
+                            Text(tab.displayTitle).font(.subheadline.weight(.medium)).lineLimit(1).frame(maxWidth: 120)
+                        }
+                        .padding(.horizontal, 12).frame(minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(active ? AnyShapeStyle(Color(hex: accentHex).opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.6))))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(active ? Color(hex: accentHex).opacity(0.6) : .clear, lineWidth: 1))
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                    .padding(.horizontal, 10).frame(height: 40)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(active ? AnyShapeStyle(Color(hex: accentHex).opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.6))))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(active ? Color(hex: accentHex).opacity(0.5) : .clear, lineWidth: 1))
-                    .onTapGesture { model.select(tab.id); dismiss() }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(tab.displayTitle), pinned")
+                    .accessibilityAddTraits(active ? .isSelected : [])
                     .contextMenu { Button("Unpin", systemImage: "pin.slash") { model.togglePin(tab.id) } }
                 }
             }
         }
     }
 
+    /// Floating glass capsule (iOS 26+) holding one button per space.
     private var spaceSwitcher: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 4) {
             ForEach(model.spaces) { space in
                 let current = space.id == model.currentSpaceID
                 Button { model.selectSpace(space.id) } label: {
                     Image(systemName: space.symbol)
-                        .font(.system(size: current ? 15 : 12, weight: .semibold))
+                        .font(current ? .callout.weight(.semibold) : .footnote.weight(.semibold))
                         .foregroundStyle(current ? Color(hex: space.colorHex) : .secondary)
-                        .frame(width: 38, height: 38)
-                        .background(current ? Color(hex: space.colorHex).opacity(0.18) : .clear, in: Circle())
+                        .frame(width: 52, height: 44)
+                        .background(current ? Color(hex: space.colorHex).opacity(0.18) : .clear, in: Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(space.name)
+                .accessibilityAddTraits(current ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity).padding(.vertical, 10)
-        .background(.bar)
+        .padding(4)
+        .chrome(Capsule())
     }
 }
 
 private struct TabCard: View {
-    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let tab: TabItem
     let image: UIImage?
     let active: Bool
-    let close: () -> Void
+    let accentHex: String
+    let height: CGFloat
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -113,22 +148,18 @@ private struct TabCard: View {
             .clipped()
             HStack(spacing: 6) {
                 SiteBadge(tab: tab, size: 18)
-                Text(tab.displayTitle).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 0)
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).padding(5)
-                        .background(.quaternary, in: Circle())
-                }
-                .buttonStyle(.plain).accessibilityLabel("Close tab")
+                Text(tab.displayTitle).font(.caption.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 32) // the close button sits over this space
             }
-            .padding(.horizontal, 8).padding(.vertical, 6)
+            .padding(.horizontal, 8).padding(.vertical, 8)
             .background(.regularMaterial)
         }
-        .frame(height: 150)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(active ? Color(hex: accentHex) : Color.primary.opacity(0.08), lineWidth: active ? 2.5 : 0.5))
+        .frame(height: height)
+        // Concentric with the grid's 14 pt margin and the display corners.
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(active ? Color(hex: accentHex) : Color.primary.opacity(0.08), lineWidth: active ? 3 : 0.5))
         .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
