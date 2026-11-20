@@ -2,59 +2,92 @@ import SwiftUI
 
 struct BrowserView: View {
     @Bindable var model: BrowserModel
-    @State private var address = ""
-    @State private var showingTabs = false
-    @FocusState private var addressFocused: Bool
+    @State private var web = WebController()
+    @State private var showingCommandBar = false
+    @State private var showingSidebar = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            SpaceBackdrop(colorHex: model.currentSpace.colorHex)
+            VStack(spacing: 10) {
+                pageCard
+                bottomBar
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
+            if showingCommandBar {
+                CommandBar(model: model) { showingCommandBar = false }
+                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .tint(Theme.accent)
+        .animation(.smooth(duration: 0.22), value: showingCommandBar)
+        .sheet(isPresented: $showingSidebar) {
+            SidebarView(model: model) { showingSidebar = false }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .tint(Theme.accent)
+        }
+    }
+
+    private var pageCard: some View {
+        ZStack {
+            Color(.systemBackground)
             if model.active.url == nil {
-                StartPage()
+                StartPage(space: model.currentSpace)
             } else {
-                WebView(tab: model.active) { id, url, title in model.pageChanged(id, url: url, title: title) }
+                WebView(tab: model.active, controller: web) { id, url, title in model.pageChanged(id, url: url, title: title) }
                     .id(model.activeID)
             }
-            Divider()
-            bar
         }
-        .onChange(of: model.activeID) { syncAddress() }
-        .onChange(of: model.active.url) { syncAddress() }
-        .sheet(isPresented: $showingTabs) { TabSwitcher(model: model) { showingTabs = false } }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.pageRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
     }
 
-    private var bar: some View {
-        HStack(spacing: 12) {
-            TextField("Search or enter address", text: $address)
-                .textFieldStyle(.roundedBorder)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.webSearch)
-                .submitLabel(.go)
-                .focused($addressFocused)
-                .onSubmit { model.go(to: address); addressFocused = false }
-            Button { showingTabs = true } label: {
-                Image(systemName: "square.on.square").accessibilityLabel("Tabs")
+    private var bottomBar: some View {
+        HStack(spacing: 8) {
+            barButton("chevron.left", "Back", enabled: web.canGoBack) { web.goBack() }
+            Button { showingCommandBar = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: model.active.url == nil ? "magnifyingglass" : "lock.fill").font(.system(size: 12, weight: .semibold))
+                    Text(model.active.shortAddress.isEmpty ? "Search or enter address" : model.active.shortAddress)
+                        .font(.system(size: 15, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                }
+                .foregroundStyle(model.active.url == nil ? .secondary : .primary)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
             }
-            Button { model.newTab() } label: {
-                Image(systemName: "plus").accessibilityLabel("New Tab")
-            }
+            .buttonStyle(.plain)
+            barButton("sidebar.left", "Tabs and spaces", enabled: true) { showingSidebar = true }
+            barButton("plus", "New Tab", enabled: true) { model.newTab(); showingCommandBar = true }
         }
-        .padding(.horizontal).padding(.vertical, 8)
-        .background(.bar)
     }
 
-    private func syncAddress() {
-        guard !addressFocused else { return }
-        address = model.active.url?.absoluteString ?? ""
+    private func barButton(_ symbol: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
+                .frame(width: 40, height: 40)
+                .background(.regularMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }
 
 private struct StartPage: View {
+    let space: Space
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "leaf").font(.system(size: 56)).foregroundStyle(.tint)
+            Image(systemName: "leaf.fill").font(.system(size: 54)).foregroundStyle(Theme.accent)
             Text("Lily").font(.largeTitle.weight(.semibold))
-            Text("Private by design.").foregroundStyle(.secondary)
+            Label(space.name, systemImage: space.symbol)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: space.colorHex))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
