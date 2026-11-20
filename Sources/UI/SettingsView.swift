@@ -60,16 +60,7 @@ struct SettingsView: View {
     }
 
     private func swatches(selection: Binding<String>) -> some View {
-        HStack(spacing: 10) {
-            ForEach(Settings.accents, id: \.self) { hex in
-                Button { selection.wrappedValue = hex } label: {
-                    Circle().fill(Color(hex: hex)).frame(width: 28, height: 28)
-                        .overlay(Circle().strokeBorder(.primary.opacity(0.7), lineWidth: selection.wrappedValue == hex ? 2.5 : 0).padding(-4))
-                }
-                .buttonStyle(.plain).accessibilityLabel(hex)
-            }
-        }
-        .padding(.vertical, 4)
+        SwatchGrid(selection: selection, diameter: 28)
     }
 
     private func clearData() {
@@ -96,18 +87,10 @@ private struct SpaceEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: space.symbol).foregroundStyle(Color(hex: space.colorHex)).frame(width: 22)
-                TextField("Name", text: $name).onSubmit { model.rename(space, to: name) }
+                TextField("Space name", text: $name).onSubmit { model.rename(space, to: name) }
                     .onChange(of: name) { _, new in model.rename(space, to: new) }
             }
-            HStack(spacing: 10) {
-                ForEach(Settings.accents, id: \.self) { hex in
-                    Button { model.recolor(space, to: hex) } label: {
-                        Circle().fill(Color(hex: hex)).frame(width: 20, height: 20)
-                            .overlay(Circle().strokeBorder(.primary.opacity(0.7), lineWidth: space.colorHex == hex ? 2 : 0).padding(-3))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            SwatchGrid(selection: Binding(get: { space.colorHex }, set: { model.recolor(space, to: $0) }), diameter: 24)
         }
         .padding(.vertical, 2)
     }
@@ -123,5 +106,26 @@ enum Settings {
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
         var scheme: ColorScheme? { self == .light ? .light : self == .dark ? .dark : nil }
+    }
+}
+
+/// Accent/space color choices: 44 pt targets, named for VoiceOver, with a ring (not just color) on the selection.
+private struct SwatchGrid: View {
+    @Binding var selection: String
+    let diameter: CGFloat
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 0)], spacing: 0) {
+            ForEach(Settings.accents, id: \.self) { hex in
+                Button { selection = hex } label: {
+                    Circle().fill(Color(hex: hex)).frame(width: diameter, height: diameter)
+                        .overlay(Circle().strokeBorder(.primary.opacity(0.7), lineWidth: selection == hex ? 2.5 : 0).padding(-4))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AccentName.of(hex))
+                .accessibilityAddTraits(selection == hex ? .isSelected : [])
+            }
+        }
     }
 }

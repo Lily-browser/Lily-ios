@@ -15,6 +15,36 @@ extension Color {
     }
 }
 
+extension View {
+    /// Floating chrome. On iOS 26 and later it is Liquid Glass (interactive, so it responds to touch);
+    /// before that a system material with a hairline edge. Chrome only: never use it on content.
+    @ViewBuilder func chrome<S: InsettableShape>(_ shape: S) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.interactive(), in: shape)
+        } else {
+            self.background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        }
+    }
+}
+
+/// Names for the accent presets, so color is never the only way to tell them apart (VoiceOver, Settings).
+enum AccentName {
+    static func of(_ hex: String) -> String {
+        switch hex.uppercased() {
+        case "#5E5CE6": return "Indigo"
+        case "#0A84FF": return "Blue"
+        case "#30B0C7": return "Teal"
+        case "#34C759": return "Green"
+        case "#FF9F0A": return "Orange"
+        case "#FF375F": return "Pink"
+        case "#BF5AF2": return "Purple"
+        case "#8E8E93": return "Gray"
+        default: return "Color"
+        }
+    }
+}
+
 /// The window behind the page card: the system background washed with the current space's color.
 struct SpaceBackdrop: View {
     let colorHex: String
@@ -37,7 +67,7 @@ struct SiteBadge: View {
         let host = tab.url?.host ?? ""
         let hue = Double(host.utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 360 }) / 360
         RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(host.isEmpty ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Color(hue: hue, saturation: 0.5, brightness: 0.82)))
+            .fill(host.isEmpty ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Color(hue: hue, saturation: 0.62, brightness: 0.55)))
             .frame(width: size, height: size)
             .overlay {
                 if let letter = host.replacingOccurrences(of: "www.", with: "").first {
@@ -46,5 +76,6 @@ struct SiteBadge: View {
                     Image(systemName: "plus").font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(.secondary)
                 }
             }
+            .accessibilityHidden(true) // decorative: the tab's title is read instead
     }
 }
