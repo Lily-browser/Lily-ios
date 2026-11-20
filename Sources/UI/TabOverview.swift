@@ -26,7 +26,7 @@ struct TabOverview: View {
                     .padding(.horizontal, 14).padding(.bottom, 84) // room for the floating space switcher
                 }
             }
-            spaceSwitcher.padding(.bottom, 8)
+            SpaceSwitcher(model: model).padding(.bottom, 8)
         }
         .sheet(isPresented: $showingSettings) { SettingsView(model: model, snapshots: snapshots) }
     }
@@ -107,28 +107,6 @@ struct TabOverview: View {
                 }
             }
         }
-    }
-
-    /// Floating glass capsule (iOS 26+) holding one button per space.
-    private var spaceSwitcher: some View {
-        HStack(spacing: 4) {
-            ForEach(model.spaces) { space in
-                let current = space.id == model.currentSpaceID
-                Button { model.selectSpace(space.id) } label: {
-                    Image(systemName: space.symbol)
-                        .font(current ? .callout.weight(.semibold) : .footnote.weight(.semibold))
-                        .foregroundStyle(current ? Color(hex: space.colorHex) : .secondary)
-                        .frame(width: 52, height: 44)
-                        .background(current ? Color(hex: space.colorHex).opacity(0.18) : .clear, in: Capsule())
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(space.name)
-                .accessibilityAddTraits(current ? .isSelected : [])
-            }
-        }
-        .padding(4)
-        .chrome(Capsule())
     }
 }
 

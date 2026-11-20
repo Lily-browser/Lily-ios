@@ -9,17 +9,74 @@ struct BrowserView: View {
     @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
     @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
+        if sizeClass == .regular { regularBody } else { compactBody }
+    }
+
+    // MARK: iPad, unfolded foldables, wide windows: the Mac's sidebar plus a system toolbar
+
+    private var regularBody: some View {
+        ZStack {
+            NavigationSplitView(columnVisibility: $columns) {
+                SidebarView(model: model, snapshots: snapshots)
+                    .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 360)
+            } detail: {
+                NavigationStack {
+                    ZStack {
+                        SpaceBackdrop(colorHex: model.currentSpace.colorHex)
+                        pageCard.padding(.horizontal, 10).padding(.bottom, 10)
+                    }
+                    .toolbar { regularToolbar }
+                    .toolbarTitleDisplayMode(.inline)
+                }
+            }
+            .accessibilityHidden(showingCommandBar)
+            if showingCommandBar {
+                CommandBar(model: model) { showingCommandBar = false }
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .tint(Color(hex: accent))
+        .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: showingCommandBar)
+    }
+
+    @ToolbarContentBuilder private var regularToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button { web.goBack() } label: { Image(systemName: "chevron.left") }
+                .disabled(!web.canGoBack).keyboardShortcut("[", modifiers: .command).accessibilityLabel("Back")
+            Button { web.goForward() } label: { Image(systemName: "chevron.right") }
+                .disabled(!web.canGoForward).keyboardShortcut("]", modifiers: .command).accessibilityLabel("Forward")
+            Button { web.reload() } label: { Image(systemName: "arrow.clockwise") }
+                .disabled(model.active.url == nil).keyboardShortcut("r", modifiers: .command).accessibilityLabel("Reload")
+        }
+        ToolbarItem(placement: .principal) {
+            addressPill.frame(minWidth: 280, maxWidth: 560).keyboardShortcut("l", modifiers: .command)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            if let url = model.active.url { ShareLink(item: url) }
+            Button { model.newTab(); showingCommandBar = true } label: { Image(systemName: "plus") }
+                .accessibilityLabel("New Tab")
+        }
+    }
+
+    // MARK: iPhone and other compact windows: bottom bar, tab overview sheet
+
+    private var compactBody: some View {
         ZStack {
             SpaceBackdrop(colorHex: model.currentSpace.colorHex)
             VStack(spacing: 10) {
                 pageCard
-                bottomBar
+                if !web.chromeHidden { bottomBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
             }
             .padding(.horizontal, 8)
             .padding(.top, 4)
-            .padding(.bottom, 6)
+            .padding(.bottom, web.chromeHidden ? 0 : 6)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: web.chromeHidden)
             .accessibilityHidden(showingCommandBar)
             if showingCommandBar {
                 CommandBar(model: model) { showingCommandBar = false }

@@ -9,6 +9,9 @@ final class WebController {
     private(set) var canGoBack = false
     private(set) var canGoForward = false
     private(set) var isLoading = false
+    /// Phone layouts slide the bottom bar away while you read (scroll down) and bring it back on scroll up.
+    private(set) var chromeHidden = false
+    func setChromeHidden(_ hidden: Bool) { if chromeHidden != hidden { chromeHidden = hidden } }
 
     func goBack() { web?.goBack() }
     func goForward() { web?.goForward() }
@@ -47,6 +50,8 @@ struct WebView: UIViewRepresentable {
         web.backgroundColor = .clear
         context.coordinator.tabID = tab.id
         controller.web = web
+        context.coordinator.watchScrolling(of: web)
+        controller.setChromeHidden(false)
         if let url = tab.url { context.coordinator.lastRequested = url; web.load(URLRequest(url: url)) }
         return web
     }
@@ -64,6 +69,8 @@ struct WebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var tabID = UUID()
         var lastRequested: URL?
+        private var scrollObservation: NSKeyValueObservation?
+        private var lastOffset: CGFloat = 0
         private let controller: WebController
         private let snapshots: SnapshotCache
         private let onChange: @MainActor (UUID, URL?, String?) -> Void
@@ -72,6 +79,22 @@ struct WebView: UIViewRepresentable {
             self.controller = controller
             self.snapshots = snapshots
             self.onChange = onChange
+        }
+
+        /// Reading direction decides the bar: down hides it, up (or the top of the page) shows it. Only the
+        /// user's own scrolling counts, so page-driven jumps and rubber-banding don't flicker it.
+        func watchScrolling(of web: WKWebView) {
+            scrollObservation = web.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+                    defer { self.lastOffset = offset }
+                    guard scrollView.isDragging || scrollView.isDecelerating else { return }
+                    let delta = offset - self.lastOffset
+                    if offset <= 8 || delta < -10 { self.controller.setChromeHidden(false) }
+                    else if delta > 10, offset > 80 { self.controller.setChromeHidden(true) }
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { controller.sync() }

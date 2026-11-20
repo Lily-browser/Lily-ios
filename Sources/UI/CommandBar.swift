@@ -37,7 +37,9 @@ struct CommandBar: View {
             }
             .chrome(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
+            .frame(maxWidth: 620)
             .padding(.horizontal, 14).padding(.top, 70)
+            .frame(maxWidth: .infinity)
             .accessibilityAddTraits(.isModal)
         }
         .accessibilityAction(.escape, dismiss)
