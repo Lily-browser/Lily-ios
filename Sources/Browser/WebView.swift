@@ -16,6 +16,21 @@ final class WebController {
     func goBack() { web?.goBack() }
     func goForward() { web?.goForward() }
     func reload() { web?.reload() }
+    func reloadFromOrigin() { web?.reloadFromOrigin() }
+    /// ⌘F: the system find bar (match count, next/previous, highlights in the page).
+    func find() { web?.findInteraction?.presentFindNavigator(showingReplace: false) }
+    func findNext() { web?.findInteraction?.findNext() }
+    func findPrevious() { web?.findInteraction?.findPrevious() }
+    func printPage() {
+        guard let web else { return }
+        let info = UIPrintInfo(dictionary: nil)
+        info.jobName = web.title ?? "Page"
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printFormatter = web.viewPrintFormatter()
+        controller.present(animated: true)
+    }
     func stop() { web?.stopLoading() }
     /// A small picture of the page as it is now, for the tab overview.
     func snapshot() async -> UIImage? {
@@ -38,14 +53,19 @@ struct WebView: UIViewRepresentable {
     let tab: TabItem
     let controller: WebController
     let snapshots: SnapshotCache
+    var zoom: Double = 1
     let onChange: @MainActor (UUID, URL?, String?) -> Void
+    var onOpen: @MainActor (URL) -> Void = { _ in }
 
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, snapshots: snapshots, onChange: onChange) }
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, snapshots: snapshots, onChange: onChange, onOpen: onOpen) }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         web.navigationDelegate = context.coordinator
+        web.uiDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
+        web.isFindInteractionEnabled = true
+        web.pageZoom = zoom
         web.isOpaque = false
         web.backgroundColor = .clear
         context.coordinator.tabID = tab.id
@@ -59,6 +79,7 @@ struct WebView: UIViewRepresentable {
     func updateUIView(_ web: WKWebView, context: Context) {
         context.coordinator.tabID = tab.id
         controller.web = web
+        if web.pageZoom != zoom { web.pageZoom = zoom }
         if let url = tab.url, web.url != url, context.coordinator.lastRequested != url {
             context.coordinator.lastRequested = url
             web.load(URLRequest(url: url))
@@ -66,7 +87,7 @@ struct WebView: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var tabID = UUID()
         var lastRequested: URL?
         private var scrollObservation: NSKeyValueObservation?
@@ -74,11 +95,21 @@ struct WebView: UIViewRepresentable {
         private let controller: WebController
         private let snapshots: SnapshotCache
         private let onChange: @MainActor (UUID, URL?, String?) -> Void
+        private let onOpen: @MainActor (URL) -> Void
 
-        init(controller: WebController, snapshots: SnapshotCache, onChange: @escaping @MainActor (UUID, URL?, String?) -> Void) {
+        init(controller: WebController, snapshots: SnapshotCache, onChange: @escaping @MainActor (UUID, URL?, String?) -> Void,
+             onOpen: @escaping @MainActor (URL) -> Void) {
             self.controller = controller
             self.snapshots = snapshots
             self.onChange = onChange
+            self.onOpen = onOpen
+        }
+
+        /// Links that ask for a new window (target=_blank, window.open) become a new tab.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme?.lowercased()) { onOpen(url) }
+            return nil
         }
 
         /// Reading direction decides the bar: down hides it, up (or the top of the page) shows it. Only the

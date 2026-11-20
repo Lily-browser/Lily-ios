@@ -19,7 +19,8 @@ Developer Program exists (device builds, TestFlight, App Store, iOS extensions o
 
 ## iPad and foldables
 - **Done:** one app, two layouts chosen by size class, not by device. Compact width (iPhone, folded phones, narrow Stage Manager windows): bottom bar and card-grid tab overview. Regular width (iPad, unfolded foldables, wide windows): the Mac's sidebar (pinned tiles, space, tabs, space switcher) plus a system toolbar with address pill; sidebar width is capped so the page keeps the room.
-- **Planned, from the Mac:** Split View (two pages side by side, drag a tab to the edge), multiple windows and Stage Manager (a window per space), drag and drop tabs between windows and apps, hardware-keyboard shortcuts beyond ⌘T/⌘L/⌘R/⌘[/⌘], pointer hover states, Little Lily (peek window).
+- **Done, from the Mac (iPad and wide windows):** Split View (two pages, focus by tapping a pane header, ⌃⌘1 / ⌃⌘0), menu bar with the Mac's shortcuts (⌘T/W/⇧T/F/G/L/K/S/R/D/1–9/+/−/0, ⌃Tab, ⌥⌘[ ], ⌘P), find in page, reopen closed tab, duplicate, move to space, close below, drag to reorder, per-site zoom (this run only), links that open new windows become tabs, extra windows (⌘N, Open in New Window).
+- **Planned, from the Mac:** more split layouts (stacked, 3, 2×2) and Link Scrolling, drag and drop between windows and apps, pointer hover states, Little Lily, ad and tracker blocking, history and bookmarks, site settings (needs signed builds for LilyKit's sealed storage), assistant.
 - iPadOS runs only iPadOS builds. Macs can run this app as an iPad app or via Mac Catalyst, but Lily-macos stays a native AppKit app; the two share LilyKit and the design language, not the UI code.
 
 ## Architecture rules

@@ -10,6 +10,12 @@ final class BrowserModel {
     private(set) var currentSpaceID: UUID
     private(set) var tabs: [TabItem]
     private(set) var activeID: UUID
+    /// The second pane in Split View (iPad and other wide windows). Not saved: a relaunch starts unsplit.
+    private(set) var splitID: UUID?
+    /// Recently closed tabs, newest last, for Reopen Closed Tab.
+    private(set) var closedTabs: [TabItem] = []
+    /// Page zoom remembered per website for this run (through the same steps as the Mac).
+    private var zooms: [String: Double] = [:]
     @ObservationIgnored private var lastActive: [UUID: UUID] = [:]
     @ObservationIgnored private let file: SessionFile?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -47,20 +53,122 @@ final class BrowserModel {
         update(activeID) { $0.url = url }
     }
 
+    var splitTab: TabItem? { splitID.flatMap { id in tabs.first { $0.id == id } } }
+    var currentSpaceTabs: [TabItem] { pinnedTabs + regularTabs }
+
     func newTab() {
         let tab = TabItem(spaceID: currentSpaceID)
         tabs.append(tab)
         activate(tab.id)
     }
 
+    /// Opens a page in a new tab next to the others (links from other apps, "Open in New Tab").
+    func open(_ url: URL, activate makeActive: Bool = true) {
+        let tab = TabItem(spaceID: currentSpaceID, url: url)
+        tabs.append(tab)
+        if makeActive { activate(tab.id) } else { scheduleSave() }
+    }
+
+    func duplicate(_ id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }), let index = tabs.firstIndex(of: tab) else { return }
+        let copy = TabItem(spaceID: tab.spaceID, url: tab.url, title: tab.title)
+        tabs.insert(copy, at: index + 1)
+        activate(copy.id)
+    }
+
+    func move(_ id: UUID, to space: Space) {
+        guard spaces.contains(where: { $0.id == space.id }) else { return }
+        update(id) { $0.spaceID = space.id; $0.isPinned = false }
+        if !tabs.contains(where: { $0.spaceID == currentSpaceID }) { tabs.append(TabItem(spaceID: currentSpaceID)) }
+        if !tabs.contains(where: { $0.id == activeID && $0.spaceID == currentSpaceID }) {
+            activate(tabs.first { $0.spaceID == currentSpaceID }!.id)
+        }
+    }
+
+    /// Reorders the unpinned tabs of the current space (drag and drop in the sidebar).
+    func moveRegularTabs(from source: IndexSet, to destination: Int) {
+        var visible = regularTabs
+        visible.move(fromOffsets: source, toOffset: destination)
+        let slots = tabs.indices.filter { tabs[$0].spaceID == currentSpaceID && !tabs[$0].isPinned }
+        for (slot, tab) in zip(slots, visible) { tabs[slot] = tab }
+        scheduleSave()
+    }
+
+    func closeBelow(_ id: UUID) {
+        let list = regularTabs
+        guard let index = list.firstIndex(where: { $0.id == id }) else { return }
+        let doomed = Set(list[(index + 1)...].map(\.id))
+        remember(tabs.filter { doomed.contains($0.id) })
+        tabs.removeAll { doomed.contains($0.id) }
+        if let other = splitID, doomed.contains(other) || doomed.contains(activeID) { splitID = nil }
+        if doomed.contains(activeID) { activate(id) }
+        scheduleSave()
+    }
+
+    func reopenClosedTab() {
+        guard var tab = closedTabs.popLast() else { return }
+        if !spaces.contains(where: { $0.id == tab.spaceID }) { tab.spaceID = currentSpaceID }
+        tabs.append(tab)
+        select(tab.id)
+    }
+    var canReopen: Bool { !closedTabs.isEmpty }
+
+    /// ⌘1–⌘8 pick the nth tab, ⌘9 the last one.
+    func selectTab(number: Int) {
+        let list = currentSpaceTabs
+        guard !list.isEmpty else { return }
+        select((number >= 9 ? list.last! : list[min(number, list.count) - 1]).id)
+    }
+
+    func selectNextTab(_ step: Int) {
+        let list = currentSpaceTabs
+        guard let index = list.firstIndex(where: { $0.id == activeID }), !list.isEmpty else { return }
+        select(list[(index + step + list.count) % list.count].id)
+    }
+
+    func selectNextSpace(_ step: Int) {
+        guard let index = spaces.firstIndex(where: { $0.id == currentSpaceID }) else { return }
+        selectSpace(spaces[(index + step + spaces.count) % spaces.count].id)
+    }
+
+    // MARK: Zoom
+
+    func zoom(for url: URL?) -> Double { SiteSettings.key(for: url).flatMap { zooms[$0] } ?? 1 }
+    func zoomStep(for url: URL?, in zoomingIn: Bool) {
+        guard let key = SiteSettings.key(for: url) else { return }
+        zooms[key] = SiteSettings.zoomLevel(after: zoom(for: url), zoomingIn: zoomingIn)
+    }
+    func resetZoom(for url: URL?) { if let key = SiteSettings.key(for: url) { zooms[key] = nil } }
+
+    // MARK: Split View
+
+    /// Shows `id` next to the active tab. Splitting with the active tab itself does nothing.
+    func split(with id: UUID) {
+        guard id != activeID, tabs.contains(where: { $0.id == id }) else { return }
+        splitID = id
+    }
+    func exitSplit() { splitID = nil }
+    /// Both panes, in the order the tabs are listed (so choosing a pane never swaps their sides).
+    var splitPanes: [TabItem] {
+        guard let other = splitTab else { return [] }
+        return [active, other].sorted { (tabs.firstIndex(of: $0) ?? 0) < (tabs.firstIndex(of: $1) ?? 0) }
+    }
+    /// Closes one pane's place in the split: the other tab stays and becomes the only page.
+    func unsplit(keeping id: UUID) {
+        splitID = nil
+        if id != activeID { activate(id) }
+    }
+
     func select(_ id: UUID) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        if tab.spaceID != currentSpaceID { splitID = nil }
         currentSpaceID = tab.spaceID
         activate(id)
     }
 
     func selectSpace(_ id: UUID) {
         guard spaces.contains(where: { $0.id == id }) else { return }
+        if id != currentSpaceID { splitID = nil }
         currentSpaceID = id
         if let remembered = lastActive[id], tabs.contains(where: { $0.id == remembered }) {
             activeID = remembered
@@ -92,9 +200,12 @@ final class BrowserModel {
     func close(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let space = tabs[index].spaceID
+        remember([tabs[index]])
+        if splitID == id { splitID = nil }
         tabs.remove(at: index)
         if !tabs.contains(where: { $0.spaceID == space }) { tabs.append(TabItem(spaceID: space)) }
-        if id == activeID {
+        if id == activeID, let other = splitID, other != id { splitID = nil; activate(other) }
+        else if id == activeID {
             let sameSpace = tabs.filter { $0.spaceID == space }
             let next = sameSpace.last { tabs.firstIndex(of: $0)! < index } ?? sameSpace[0]
             activate(next.id)
@@ -104,6 +215,8 @@ final class BrowserModel {
 
     /// Closes every unpinned tab in the current space except `keep`.
     func closeOthers(keeping keep: UUID) {
+        remember(tabs.filter { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep })
+        splitID = nil
         tabs.removeAll { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep }
         if tabs.contains(where: { $0.id == keep }) { activate(keep) } else { select(tabs.first { $0.spaceID == currentSpaceID }?.id ?? active.id) }
     }
@@ -128,7 +241,13 @@ final class BrowserModel {
         SessionSnapshot(spaces: spaces, tabs: tabs, activeID: activeID, currentSpaceID: currentSpaceID)
     }
 
+    private func remember(_ closed: [TabItem]) {
+        closedTabs.append(contentsOf: closed.filter { $0.url != nil })
+        if closedTabs.count > 20 { closedTabs.removeFirst(closedTabs.count - 20) }
+    }
+
     private func activate(_ id: UUID) {
+        if splitID == id { splitID = activeID } // choosing the other pane just moves focus
         activeID = id
         lastActive[currentSpaceID] = id
         scheduleSave()

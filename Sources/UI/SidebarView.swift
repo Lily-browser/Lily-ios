@@ -12,7 +12,7 @@ struct SidebarView: View {
     var body: some View {
         List {
             if !model.pinnedTabs.isEmpty {
-                PinnedTiles(model: model, accentHex: accentHex)
+                PinnedTiles(model: model, snapshots: snapshots, accentHex: accentHex)
                     .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 8, trailing: 8))
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
@@ -22,13 +22,13 @@ struct SidebarView: View {
                         .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
+                .onMove { model.moveRegularTabs(from: $0, to: $1) }
                 Button { model.newTab() } label: {
                     Label("New Tab", systemImage: "plus").font(.body).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 10)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut("t", modifiers: .command)
                 .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
             } header: {
@@ -72,16 +72,13 @@ struct SidebarView: View {
         .accessibilityAddTraits(active ? .isSelected : [])
         .swipeActions(edge: .trailing) { Button("Close", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) } }
         .swipeActions(edge: .leading) { Button("Pin") { model.togglePin(tab.id) }.tint(Color(hex: accentHex)) }
-        .contextMenu {
-            Button("Pin", systemImage: "pin") { model.togglePin(tab.id) }
-            Button("Close Other Tabs", systemImage: "xmark.square") { model.closeOthers(keeping: tab.id) }
-            Button("Close", systemImage: "xmark", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) }
-        }
+        .contextMenu { TabMenu(model: model, snapshots: snapshots, tab: tab) }
     }
 }
 
 private struct PinnedTiles: View {
     let model: BrowserModel
+    let snapshots: SnapshotCache
     let accentHex: String
 
     var body: some View {
@@ -100,8 +97,44 @@ private struct PinnedTiles: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(tab.displayTitle), pinned")
                 .accessibilityAddTraits(active ? .isSelected : [])
-                .contextMenu { Button("Unpin", systemImage: "pin.slash") { model.togglePin(tab.id) } }
+                .contextMenu { TabMenu(model: model, snapshots: snapshots, tab: tab) }
             }
         }
+    }
+}
+
+/// The Mac's tab context menu, minus what only makes sense with a pointer-first window manager.
+struct TabMenu: View {
+    let model: BrowserModel
+    let snapshots: SnapshotCache
+    let tab: TabItem
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        Button(tab.isPinned ? "Unpin" : "Pin", systemImage: tab.isPinned ? "pin.slash" : "pin") { model.togglePin(tab.id) }
+        Button("Duplicate", systemImage: "plus.square.on.square") { model.duplicate(tab.id) }
+        if sizeClass == .regular, tab.id != model.activeID {
+            Button("Open in Split View", systemImage: "rectangle.split.2x1") { model.split(with: tab.id) }
+        }
+        if let url = tab.url {
+            Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
+            ShareLink(item: url)
+            Button("Open in New Window", systemImage: "macwindow.badge.plus") { WindowSeed.pending.append(url); openWindow(id: WindowSeed.id) }
+        }
+        let others = model.spaces.filter { $0.id != tab.spaceID }
+        if !others.isEmpty {
+            Menu("Move to Space", systemImage: "arrow.right.square") {
+                ForEach(others) { space in
+                    Button(space.name, systemImage: space.symbol) { model.move(tab.id, to: space) }
+                }
+            }
+        }
+        Divider()
+        if !tab.isPinned {
+            Button("Close Tabs Below", systemImage: "arrow.down.to.line") { model.closeBelow(tab.id) }
+            Button("Close Other Tabs", systemImage: "xmark.square") { model.closeOthers(keeping: tab.id) }
+        }
+        Button("Close Tab", systemImage: "xmark", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) }
     }
 }
