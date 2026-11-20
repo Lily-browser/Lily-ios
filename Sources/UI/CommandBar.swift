@@ -3,6 +3,7 @@ import SwiftUI
 /// The Mac's floating command bar: a blurred card over a dimmed window with the field on top and
 /// matching tabs and the search action below.
 struct CommandBar: View {
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let model: BrowserModel
     let dismiss: () -> Void
     @State private var text = ""
@@ -61,7 +62,7 @@ struct CommandBar: View {
         } label: {
             HStack(spacing: 10) {
                 if let tab = row.tab { SiteBadge(tab: tab, size: 24) }
-                else { Image(systemName: row.symbol ?? "globe").frame(width: 24, height: 24).foregroundStyle(Theme.accent) }
+                else { Image(systemName: row.symbol ?? "globe").frame(width: 24, height: 24).foregroundStyle(Color(hex: accentHex)) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(row.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
                     if let subtitle = row.subtitle, !subtitle.isEmpty {
@@ -72,7 +73,7 @@ struct CommandBar: View {
                 if row.tab == nil { Image(systemName: "return").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary) }
             }
             .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(row.id == "go" ? AnyShapeStyle(Theme.accent.opacity(0.14)) : AnyShapeStyle(.clear),
+            .background(row.id == "go" ? AnyShapeStyle(Color(hex: accentHex).opacity(0.14)) : AnyShapeStyle(.clear),
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .contentShape(Rectangle())
         }
