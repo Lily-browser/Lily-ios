@@ -1,7 +1,7 @@
 import Foundation
 
 /// A workspace with its own tabs, a symbol and a color (like Spaces on the Mac).
-struct Space: Identifiable, Equatable, Sendable {
+struct Space: Identifiable, Equatable, Sendable, Codable {
     let id: UUID
     var name: String
     var symbol: String
@@ -20,7 +20,7 @@ struct Space: Identifiable, Equatable, Sendable {
 
 /// Metadata-first tab: just enough to list, search and restore it. A web view exists only for the
 /// visible tab (see `BrowserModel`), so thousands of tabs cost a few hundred bytes each.
-struct TabItem: Identifiable, Equatable, Sendable {
+struct TabItem: Identifiable, Equatable, Sendable, Codable {
     let id: UUID
     var spaceID: UUID
     var url: URL?

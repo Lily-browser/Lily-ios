@@ -66,3 +66,48 @@ struct BrowserModelTests {
         #expect(model.matches("exam").count == 1)
     }
 }
+
+@MainActor
+struct SessionTests {
+    private func tempFile() -> SessionFile {
+        SessionFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("lily-test-\(UUID().uuidString)/session.json"))
+    }
+
+    @Test func snapshotRoundTripsThroughTheFile() {
+        let file = tempFile()
+        let model = BrowserModel()
+        model.pageChanged(model.activeID, url: URL(string: "https://example.com"), title: "Example")
+        file.write(model.snapshot)
+        #expect(file.load() == model.snapshot)
+        file.delete()
+        #expect(file.load() == nil)
+    }
+
+    @Test func aSnapshotWithAnUnknownSpaceIsRejected() {
+        let model = BrowserModel()
+        var snapshot = model.snapshot
+        snapshot.tabs[0].spaceID = UUID()
+        let file = tempFile()
+        file.write(snapshot)
+        #expect(file.load() == nil)
+    }
+
+    @Test func renameAndRecolorKeepASpaceUsable() {
+        let model = BrowserModel()
+        let space = model.currentSpace
+        model.rename(space, to: "  Home  ")
+        model.recolor(space, to: "#FF375F")
+        #expect(model.currentSpace.name == "Home" && model.currentSpace.colorHex == "#FF375F")
+        model.rename(space, to: "   ")
+        #expect(model.currentSpace.name == "Home")
+    }
+
+    @Test func closeOthersKeepsPinnedAndTheChosenTab() {
+        let model = BrowserModel()
+        let keep = model.activeID
+        model.newTab(); model.newTab()
+        model.togglePin(model.activeID)
+        model.closeOthers(keeping: keep)
+        #expect(model.regularTabs.map(\.id) == [keep] && model.pinnedTabs.count == 1)
+    }
+}

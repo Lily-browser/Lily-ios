@@ -3,7 +3,6 @@ import SwiftUI
 /// The Mac app's look: indigo accent, a per-space color tinting the backdrop, rounded continuous shapes.
 enum Theme {
     static let accentHex = "#5E5CE6" // the app icon's indigo (Apple's system indigo)
-    static let accent = Color(hex: accentHex)
     static let pageRadius: CGFloat = 14
     static let rowRadius: CGFloat = 9
 }

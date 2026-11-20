@@ -3,6 +3,9 @@ import SwiftUI
 struct BrowserView: View {
     @Bindable var model: BrowserModel
     @State private var web = WebController()
+    @State private var snapshots = SnapshotCache()
+    @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
+    @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @State private var showingCommandBar = false
     @State private var showingSidebar = false
 
@@ -22,13 +25,15 @@ struct BrowserView: View {
                     .zIndex(1)
             }
         }
-        .tint(Theme.accent)
+        .tint(Color(hex: accent))
+        .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
         .animation(.smooth(duration: 0.22), value: showingCommandBar)
         .sheet(isPresented: $showingSidebar) {
-            SidebarView(model: model) { showingSidebar = false }
+            TabOverview(model: model, snapshots: snapshots) { showingSidebar = false }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .tint(Theme.accent)
+                .tint(Color(hex: accent))
+                .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
         }
     }
 
@@ -38,7 +43,7 @@ struct BrowserView: View {
             if model.active.url == nil {
                 StartPage(space: model.currentSpace)
             } else {
-                WebView(tab: model.active, controller: web) { id, url, title in model.pageChanged(id, url: url, title: title) }
+                WebView(tab: model.active, controller: web, snapshots: snapshots) { id, url, title in model.pageChanged(id, url: url, title: title) }
                     .id(model.activeID)
             }
         }
@@ -61,7 +66,12 @@ struct BrowserView: View {
                 .overlay(Capsule().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
-            barButton("sidebar.left", "Tabs and spaces", enabled: true) { showingSidebar = true }
+            barButton("square.on.square", "Tabs and spaces", enabled: true) {
+                Task {
+                    if let image = await web.snapshot() { snapshots.set(image, for: model.activeID) }
+                    showingSidebar = true
+                }
+            }
             barButton("plus", "New Tab", enabled: true) { model.newTab(); showingCommandBar = true }
         }
     }
@@ -81,10 +91,11 @@ struct BrowserView: View {
 }
 
 private struct StartPage: View {
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     let space: Space
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "leaf.fill").font(.system(size: 54)).foregroundStyle(Theme.accent)
+            Image(systemName: "leaf.fill").font(.system(size: 54)).foregroundStyle(Color(hex: accentHex))
             Text("Lily").font(.largeTitle.weight(.semibold))
             Label(space.name, systemImage: space.symbol)
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: space.colorHex))

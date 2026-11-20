@@ -14,6 +14,14 @@ final class WebController {
     func goForward() { web?.goForward() }
     func reload() { web?.reload() }
     func stop() { web?.stopLoading() }
+    /// A small picture of the page as it is now, for the tab overview.
+    func snapshot() async -> UIImage? {
+        guard let web else { return nil }
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = 320
+        return try? await web.takeSnapshot(configuration: config)
+    }
+
     func sync() {
         canGoBack = web?.canGoBack ?? false
         canGoForward = web?.canGoForward ?? false
@@ -26,9 +34,10 @@ final class WebController {
 struct WebView: UIViewRepresentable {
     let tab: TabItem
     let controller: WebController
+    let snapshots: SnapshotCache
     let onChange: @MainActor (UUID, URL?, String?) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, onChange: onChange) }
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, snapshots: snapshots, onChange: onChange) }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
@@ -56,10 +65,12 @@ struct WebView: UIViewRepresentable {
         var tabID = UUID()
         var lastRequested: URL?
         private let controller: WebController
+        private let snapshots: SnapshotCache
         private let onChange: @MainActor (UUID, URL?, String?) -> Void
 
-        init(controller: WebController, onChange: @escaping @MainActor (UUID, URL?, String?) -> Void) {
+        init(controller: WebController, snapshots: SnapshotCache, onChange: @escaping @MainActor (UUID, URL?, String?) -> Void) {
             self.controller = controller
+            self.snapshots = snapshots
             self.onChange = onChange
         }
 
@@ -68,6 +79,11 @@ struct WebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             onChange(tabID, webView.url, webView.title)
             controller.sync()
+            let id = tabID
+            Task { // let the page paint, then keep a thumbnail for the tab overview
+                try? await Task.sleep(for: .milliseconds(600))
+                if let image = await controller.snapshot() { snapshots.set(image, for: id) }
+            }
         }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { controller.sync() }
     }
