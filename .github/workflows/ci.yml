@@ -1,0 +1,30 @@
+# Required check for every pull request into main: lint, then build and test on the iOS Simulator.
+name: CI
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    name: test
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint
+        run: ./scripts/security-lint.sh
+      - name: Generate project
+        run: brew install xcodegen && xcodegen generate --quiet
+      - name: Build and test (iOS Simulator)
+        run: |
+          dest=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]*' | sed 's/ *$//')
+          xcodebuild -project Lily.xcodeproj -scheme Lily -destination "platform=iOS Simulator,name=$dest" test | tail -20

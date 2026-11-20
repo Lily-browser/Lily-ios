@@ -1,6 +1,6 @@
 # Lily for iOS
 
-The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, privacy-first WebKit browser. **Status: not started** — this repository holds the plan and rules; the first code lands once [LilyKit](https://github.com/Lily-browser/LilyKit) 0.1.0 is tagged.
+The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, privacy-first WebKit browser. **Status: skeleton** — one web view, address bar, tab list; see [`docs/PLAN.md`](docs/PLAN.md) for the milestones.
 
 ## How it's built
 
@@ -10,7 +10,7 @@ The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, pr
 
 ## First milestones
 
-1. Xcode project (or SwiftPM app) that depends on a pinned LilyKit tag and shows a `WKWebView` with the command-bar address field.
+1. ~~Xcode project that depends on a pinned LilyKit tag and shows a `WKWebView` with an address field.~~ Done (`make test`).
 2. Tabs (metadata-first, web views only for visible tabs) and spaces, backed by LilyKit's stores.
 3. Content blocking from LilyKit's converted rules; HTTPS-first and tracking-parameter stripping.
 4. Extensions and Handoff.
