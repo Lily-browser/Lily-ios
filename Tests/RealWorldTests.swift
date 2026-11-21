@@ -41,6 +41,17 @@ struct RealWorldTests {
         #expect(plainProbe.failure == nil)
     }
 
+    /// A domain that is only in EasyList (not in the ~130-domain built-in list): proves the real lists are on by default.
+    @Test func easyListDomainsAreBlockedOutOfTheBox() async {
+        await Blocking.prepare()
+        for _ in 0..<1200 where Blocking.blocker.isUpdating { try? await Task.sleep(for: .milliseconds(100)) }
+        let web = WKWebView(frame: .zero), probe = Probe()
+        Blocking.configure(web)
+        await probe.load(web, URL(string: "https://0019x.com/")!)
+        #expect(Blocking.blocker.isListEnabled("easylist"))
+        #expect(probe.failure?.code == 104, "EasyList rule not applied: \(String(describing: probe.failure)); status: \(Blocking.blocker.status)")
+    }
+
     @Test func theRealKeychainSealsAndRestoresASession() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lily-kc-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
