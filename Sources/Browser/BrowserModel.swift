@@ -18,6 +18,8 @@ final class BrowserModel {
     let sites: SiteSettings
     @ObservationIgnored private var lastActive: [UUID: UUID] = [:]
     @ObservationIgnored private let storage: SessionStorage?
+    /// Private tabs: their own non-persistent web data store, never saved, never offered for reopening.
+    private(set) var privateIDs: Set<UUID> = []
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     /// With `storage`, every change is saved shortly after it happens. Call `restore()` to bring back the last session.
@@ -69,6 +71,15 @@ final class BrowserModel {
 
     func newTab() {
         let tab = TabItem(spaceID: currentSpaceID)
+        tabs.append(tab)
+        activate(tab.id)
+    }
+
+    func isPrivate(_ id: UUID) -> Bool { privateIDs.contains(id) }
+
+    func newPrivateTab() {
+        let tab = TabItem(spaceID: currentSpaceID)
+        privateIDs.insert(tab.id)
         tabs.append(tab)
         activate(tab.id)
     }
@@ -211,7 +222,8 @@ final class BrowserModel {
     func close(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let space = tabs[index].spaceID
-        remember([tabs[index]])
+        if !privateIDs.contains(id) { remember([tabs[index]]) }
+        forgetPrivate([id])
         if splitID == id { splitID = nil }
         tabs.remove(at: index)
         if !tabs.contains(where: { $0.spaceID == space }) { tabs.append(TabItem(spaceID: space)) }
@@ -226,7 +238,9 @@ final class BrowserModel {
 
     /// Closes every unpinned tab in the current space except `keep`.
     func closeOthers(keeping keep: UUID) {
-        remember(tabs.filter { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep })
+        let closing = tabs.filter { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep }
+        remember(closing.filter { !privateIDs.contains($0.id) })
+        forgetPrivate(closing.map(\.id))
         splitID = nil
         tabs.removeAll { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep }
         if tabs.contains(where: { $0.id == keep }) { activate(keep) } else { select(tabs.first { $0.spaceID == currentSpaceID }?.id ?? active.id) }
@@ -248,8 +262,19 @@ final class BrowserModel {
             .prefix(5).map { $0 }
     }
 
+    /// What is saved: private tabs are left out, and the selection falls back to a saved tab.
     var snapshot: TabSession {
-        TabSession(spaces: spaces, tabs: tabs, activeID: activeID, currentSpaceID: currentSpaceID)
+        var saved = tabs.filter { !privateIDs.contains($0.id) }
+        if saved.isEmpty { saved = [TabItem(spaceID: currentSpaceID)] }
+        let selected = saved.contains { $0.id == activeID } ? activeID : (saved.first { $0.spaceID == currentSpaceID } ?? saved[0]).id
+        return TabSession(spaces: spaces, tabs: saved, activeID: selected, currentSpaceID: currentSpaceID)
+    }
+
+    /// Drops private state: when the last private tab goes, its cookies and storage go with it.
+    private func forgetPrivate(_ ids: [UUID]) {
+        guard !privateIDs.isEmpty else { return }
+        privateIDs.subtract(ids)
+        if privateIDs.isEmpty { PrivateBrowsing.reset() }
     }
 
     private func remember(_ closed: [TabItem]) {

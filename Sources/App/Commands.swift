@@ -6,6 +6,7 @@ struct BrowserActions {
     let web: WebController
     let focusAddress: () -> Void
     let newTab: () -> Void
+    let newPrivateTab: () -> Void
     let toggleSidebar: () -> Void
     let splitWithNext: () -> Void
 }
@@ -35,6 +36,7 @@ struct LilyCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Tab") { actions?.newTab() }.keyboardShortcut("t").disabled(actions == nil)
+            Button("New Private Tab") { actions?.newPrivateTab() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(actions == nil)
             Button("New Window") { openWindow(id: WindowSeed.id) }.keyboardShortcut("n")
             Divider()
             Button("Close Tab") { if let a = actions { a.model.close(a.model.activeID) } }.keyboardShortcut("w").disabled(actions == nil)

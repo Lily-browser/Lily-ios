@@ -22,6 +22,7 @@ struct BrowserView: View {
                 model: model, web: web,
                 focusAddress: { showingCommandBar = true },
                 newTab: { model.newTab(); showingCommandBar = true },
+                newPrivateTab: { model.newPrivateTab(); showingCommandBar = true },
                 toggleSidebar: { columns = columns == .detailOnly ? .all : .detailOnly },
                 splitWithNext: splitWithNext))
     }
@@ -86,6 +87,7 @@ struct BrowserView: View {
             if let url = model.active.url { ShareLink(item: url) }
             Button { model.newTab(); showingCommandBar = true } label: { Image(systemName: "plus") }
                 .accessibilityLabel("New Tab")
+                .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); showingCommandBar = true } }
         }
     }
 
@@ -179,7 +181,7 @@ struct BrowserView: View {
                 StartPage(space: model.currentSpace)
             } else {
                 WebView(tab: tab, controller: controllers.controller(for: tab.id), snapshots: snapshots,
-                        zoom: model.zoom(for: tab.url), site: model.sites.site(for: tab.url),
+                        zoom: model.zoom(for: tab.url), site: model.sites.site(for: tab.url), isPrivate: model.isPrivate(tab.id),
                         onChange: { id, url, title in model.pageChanged(id, url: url, title: title) },
                         onOpen: { model.open($0) })
                     .id(tab.id)
@@ -210,6 +212,7 @@ struct BrowserView: View {
                 }
             }
             barButton("plus", "New Tab", enabled: true) { model.newTab(); showingCommandBar = true }
+                .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); showingCommandBar = true } }
         }
     }
 
