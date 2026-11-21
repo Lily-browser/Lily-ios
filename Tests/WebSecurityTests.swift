@@ -45,6 +45,7 @@ struct WebSecurityTests {
         #expect(ErrorPage.isCertificateProblem(cert) && !ErrorPage.suggestsHTTPFallback(cert))
         #expect(ErrorPage.message(for: cert)?.title == "This connection isn't private")
         #expect(ErrorPage.suggestsHTTPFallback(NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)))
+        #expect(ErrorPage.suggestsHTTPFallback(NSError(domain: NSURLErrorDomain, code: NSURLErrorNetworkConnectionLost))) // a server with no HTTPS often resets the connection
         // An odd error never leaks its own text.
         let odd = NSError(domain: "X", code: 1, userInfo: [NSLocalizedDescriptionKey: "secret-token-123"])
         #expect(ErrorPage.message(for: odd)?.detail.contains("secret") == false)
@@ -67,5 +68,24 @@ struct WebSecurityTests {
         #expect(model.active.url == nil)
         model.go(to: "https://example.com")
         #expect(model.active.url?.host == "example.com")
+    }
+}
+
+@MainActor
+struct UpgradeLogTests {
+    @Test func anUpgradedHostGetsAShortTimeoutOthersDont() {
+        let url = URL(string: "https://upgraded-host.example/")!
+        #expect(UpgradeLog.request(for: url).timeoutInterval == 60)
+        UpgradeLog.record("Upgraded-Host.example")
+        #expect(UpgradeLog.wasUpgraded("upgraded-host.example"))
+        #expect(UpgradeLog.request(for: url).timeoutInterval == UpgradeLog.attemptTimeout)
+        // Plain HTTP requests (after the user agreed) keep the default.
+        #expect(UpgradeLog.request(for: URL(string: "http://upgraded-host.example/")!).timeoutInterval == 60)
+    }
+
+    @Test func typingAnHTTPAddressRecordsTheUpgrade() {
+        let model = BrowserModel()
+        model.go(to: "http://typed-host.example/")
+        #expect(model.active.url?.scheme == "https" && UpgradeLog.wasUpgraded("typed-host.example"))
     }
 }
