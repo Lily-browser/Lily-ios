@@ -13,7 +13,9 @@ struct SettingsView: View {
     @AppStorage(Preferences.Key.searchEngine) private var engine = Preferences.defaultSearchEngine.rawValue
     @AppStorage(Preferences.Key.httpsFirst) private var httpsFirst = true
     @AppStorage(Preferences.Key.removeLinkTracking) private var removeTracking = true
+    @AppStorage(Preferences.Key.adBlock) private var adBlock = true
     @AppStorage(Preferences.Key.restoreSession) private var restore = true
+    private var blocker: AdBlocker { Blocking.blocker }
     @State private var confirmingClear = false
     @State private var cleared = false
 
@@ -33,12 +35,23 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    Toggle("Block ads and trackers", isOn: $adBlock)
                     Toggle("Always try HTTPS first", isOn: $httpsFirst)
                     Toggle("Remove tracking from links", isOn: $removeTracking)
                     Toggle("Restore tabs on launch", isOn: $restore)
                     Button("Clear Browsing Data…", role: .destructive) { confirmingClear = true }
                 } header: { Text("Privacy") } footer: {
                     Text(cleared ? "Cleared: cookies, caches, site storage and tab thumbnails." : "Removes cookies, caches and site storage. Your tabs stay.")
+                }
+                if adBlock {
+                    Section {
+                        ForEach(FilterLists.all) { list in
+                            Toggle(isOn: Binding(get: { blocker.isListEnabled(list.id) }, set: { blocker.setList(list.id, enabled: $0) })) {
+                                VStack(alignment: .leading) { Text(list.name); Text(list.summary).font(.caption).foregroundStyle(.secondary) }
+                            }
+                        }
+                        Button("Update Filter Lists") { Task { await blocker.updateFilterLists() } }.disabled(blocker.isUpdating)
+                    } header: { Text("Filter lists") } footer: { Text("\(blocker.status). Changes apply to pages you open next.") }
                 }
                 Section("Spaces") {
                     ForEach(model.spaces) { space in SpaceEditor(model: model, space: space) }
@@ -48,6 +61,7 @@ struct SettingsView: View {
                     Text("Lily is private by design: no accounts, no analytics.").font(.footnote).foregroundStyle(.secondary)
                 }
             }
+            .onChange(of: adBlock) { _, _ in blocker.settingsChanged() }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

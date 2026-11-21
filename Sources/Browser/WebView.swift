@@ -61,6 +61,7 @@ struct WebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        Blocking.configure(web)
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
