@@ -19,4 +19,7 @@ check "no eval/innerHTML/string timers" '\beval\(|innerHTML|setTimeout\("|setInt
 check "no file access from file URLs" 'allowFileAccessFromFileURLs|allowUniversalAccessFromFileURLs' "${SWIFT[@]}"
 check "no secrets in UserDefaults" 'UserDefaults.*(password|token|secret|apiKey)' "${SWIFT[@]}"
 check "LilyKit pinned by exact tag, never a local path" 'path:[[:space:]]*\.\.|\.package\(path' "${CFG[@]}"
+for key in NSCameraUsageDescription NSMicrophoneUsageDescription NSLocationWhenInUseUsageDescription; do
+  if grep -q "$key" project.yml; then echo "✔ $key in project.yml"; else echo "✘ $key missing from project.yml (a page asking for it would end the app)" >&2; failures=$((failures + 1)); fi
+done
 [ "$failures" -eq 0 ] && echo "security-lint: all checks passed" || { echo "security-lint: $failures check(s) failed" >&2; exit 1; }

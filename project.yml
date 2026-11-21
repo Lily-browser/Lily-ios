@@ -28,6 +28,10 @@ targets:
       properties:
         CFBundleDisplayName: Lily
         UILaunchScreen: {}
+        NSCameraUsageDescription: Websites you allow can use the camera, for example for video calls.
+        NSMicrophoneUsageDescription: Websites you allow can use the microphone, for example for calls and voice messages.
+        NSLocationWhenInUseUsageDescription: Websites you allow can ask for your location, for example for maps.
+        ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
