@@ -13,9 +13,9 @@ Developer Program exists (device builds, TestFlight, App Store, iOS extensions o
 | 3 | Privacy core: content blocking via `WKContentRuleList` from LilyKit's converted rules; tracking-parameter stripping; per-site settings; private tabs (non-persistent store) | LilyKit ad-block, `SiteSettings` | ad and tracker blocking (built-in + filter lists, Settings) **done**; per-site settings, private tabs **done**, tracking-parameter stripping (done) |
 | 4 | Library: history, bookmarks, downloads, find in page, share sheet, reader-style start page | LilyKit `History`, `Bookmarks` | |
 | 5 | Assistant (Ollama on the LAN / Mac), command palette | LilyKit `Agent` | |
-| 6 | Continuity: Handoff with Lily-macos; sync only after #102 is decided | | |
+| 6 | Continuity: Share extension and `lily://open` link (**done**, no paid program needed); Handoff with Lily-macos; sync only after #102 is decided | | share extension done |
 | 7 | Extensions (`WKWebExtensionController`, iOS 18.4+); migration from Safari/Chrome exports | LilyKit `Extensions`, `Migration` | |
-| 8 | Release: icon variants, App Store assets, TestFlight | paid membership (device installs work free, see docs/DEVICE.md) | blocked |
+| 8 | Release: icon variants, App Store assets, TestFlight, default-browser entitlement | paid membership (device installs work free, see docs/DEVICE.md); checklist in docs/RELEASE.md | prepared, blocked on the account |
 
 ## iPad and foldables
 - **Done:** one app, two layouts chosen by size class, not by device. Compact width (iPhone, folded phones, narrow Stage Manager windows): bottom bar and card-grid tab overview. Regular width (iPad, unfolded foldables, wide windows): the Mac's sidebar (pinned tiles, space, tabs, space switcher) plus a system toolbar with address pill; sidebar width is capped so the page keeps the room.

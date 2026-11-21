@@ -120,7 +120,7 @@ Background the app with (a) a normal tab, (b) a private tab. Open the app switch
 *Pass:* with only a system-trusted CA, Lily's own list downloads work (they use the system trust, so a user-installed CA will work: expected); at idle there are **no** requests except documented ones (list updates). No analytics, no identifiers in headers, a generic User-Agent. *Fail (High):* any unexpected host contacted, or a plaintext HTTP request.
 
 ### C-8. URL schemes, Handoff, share, drag
-Send Lily links from Safari, Messages, Mail and AirDrop; try `lily://`-like custom schemes (none registered, expected). Drag a link between windows on iPad. *Pass:* only `http(s)` open; nothing runs automatically; a malformed link does nothing.
+Send Lily links from Safari, Messages, Mail and AirDrop; use the Share extension ("Lily" in the share sheet) on a page, a link, and a non-web item. The app registers one scheme, `lily://open?url=<http(s) page>`: try it with `javascript:`, `file:`, `data:`, another host (`lily://settings`), a 10 KB address and a malformed query (`LilyLinkTests` covers the logic; do it for real on the device). Drag a link between windows on iPad. *Pass:* only `http(s)` open; nothing runs automatically; a malformed link does nothing.
 
 ### C-9. Binary hardening
 `otool -hv`, `otool -Iv | grep stack_chk`, `codesign -dvvv --entitlements -`, `strings -a Lily | grep -iE "http|key|token|secret|password"`.
