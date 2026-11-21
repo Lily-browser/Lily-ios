@@ -52,6 +52,7 @@ struct CommandBar: View {
         let subtitle: String?
         let symbol: String?
         let tab: TabItem?
+        var url: URL? = nil
     }
 
     private var results: [Row] {
@@ -62,12 +63,20 @@ struct CommandBar: View {
         }
         let tabs = trimmed.isEmpty ? Array(model.regularTabs.filter { $0.url != nil }.prefix(5)) : model.matches(trimmed)
         rows += tabs.map { Row(id: $0.id.uuidString, title: $0.displayTitle, subtitle: $0.shortAddress, symbol: nil, tab: $0) }
+        if !trimmed.isEmpty {
+            var seen = Set(tabs.compactMap(\.url))
+            let marks = (model.bookmarks?.search(trimmed, limit: 3) ?? []).compactMap { node in node.url.map { (node.title, $0, "star") } }
+            let past = (model.history?.search(trimmed, limit: 6) ?? []).map { ($0.title, $0.url, "clock") }
+            for (title, url, symbol) in (marks + past) where seen.insert(url).inserted && rows.count < 8 {
+                rows.append(Row(id: url.absoluteString, title: title.isEmpty ? (url.host ?? url.absoluteString) : title, subtitle: url.host, symbol: symbol, tab: nil, url: url))
+            }
+        }
         return rows
     }
 
     private func resultRow(_ row: Row) -> some View {
         Button {
-            if let tab = row.tab { model.select(tab.id); dismiss() } else { open() }
+            if let tab = row.tab { model.select(tab.id); dismiss() } else if let url = row.url { model.go(to: url.absoluteString); dismiss() } else { open() }
         } label: {
             HStack(spacing: 10) {
                 if let tab = row.tab { SiteBadge(tab: tab, size: 24) }
@@ -79,7 +88,7 @@ struct CommandBar: View {
                     }
                 }
                 Spacer()
-                if row.tab == nil { Image(systemName: "return").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityHidden(true) }
+                if row.tab == nil, row.url == nil { Image(systemName: "return").font(.caption.weight(.semibold)).foregroundStyle(.secondary).accessibilityHidden(true) }
             }
             .padding(.horizontal, 10).frame(minHeight: 44)
             .background(row.id == "go" ? AnyShapeStyle(Color(hex: accentHex).opacity(0.14)) : AnyShapeStyle(.clear),
@@ -87,7 +96,7 @@ struct CommandBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(row.tab == nil ? "Searches or opens the address" : "Switches to this tab")
+        .accessibilityHint(row.tab != nil ? "Switches to this tab" : row.url != nil ? "Opens this page" : "Searches or opens the address")
     }
 
     private func open() {

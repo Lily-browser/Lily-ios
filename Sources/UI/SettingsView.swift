@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage(Preferences.Key.removeLinkTracking) private var removeTracking = true
     @AppStorage(Preferences.Key.adBlock) private var adBlock = true
     @AppStorage(Preferences.Key.restoreSession) private var restore = true
+    @AppStorage(Library.keepHistoryKey) private var keepHistory = true
     private var blocker: AdBlocker { Blocking.blocker }
     @State private var confirmingClear = false
     @State private var cleared = false
@@ -39,9 +40,10 @@ struct SettingsView: View {
                     Toggle("Always try HTTPS first", isOn: $httpsFirst)
                     Toggle("Remove tracking from links", isOn: $removeTracking)
                     Toggle("Restore tabs on launch", isOn: $restore)
+                    Toggle("Keep browsing history", isOn: $keepHistory)
                     Button("Clear Browsing Data…", role: .destructive) { confirmingClear = true }
                 } header: { Text("Privacy") } footer: {
-                    Text(cleared ? "Cleared: cookies, caches, site storage and tab thumbnails." : "Removes cookies, caches and site storage. Your tabs stay.")
+                    Text(cleared ? "Cleared: history, cookies, caches, site storage and tab thumbnails." : "Removes history, cookies, caches and site storage. Your tabs and bookmarks stay.")
                 }
                 if adBlock {
                     Section {
@@ -65,7 +67,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .confirmationDialog("Clear all cookies, caches and site data?", isPresented: $confirmingClear, titleVisibility: .visible) {
+            .confirmationDialog("Clear history, cookies, caches and site data?", isPresented: $confirmingClear, titleVisibility: .visible) {
                 Button("Clear Browsing Data", role: .destructive) { clearData() }
             }
         }
@@ -79,6 +81,7 @@ struct SettingsView: View {
 
     private func clearData() {
         snapshots.clear()
+        model.history?.clear()
         Task {
             await WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
             cleared = true

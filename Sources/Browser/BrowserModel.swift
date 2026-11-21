@@ -17,14 +17,20 @@ final class BrowserModel {
     /// Per-website choices (zoom, dark mode, JavaScript, ads), sealed on disk; shared by every window.
     let sites: SiteSettings
     @ObservationIgnored private let storage: SessionStorage?
+    /// Visited pages and bookmarks (nil in tests that don't need them). Private tabs never reach `history`.
+    let history: History?
+    let bookmarks: Bookmarks?
     /// Private tabs: their own non-persistent web data store, never saved, never offered for reopening.
     private(set) var privateIDs: Set<UUID> = []
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     /// With `storage`, every change is saved shortly after it happens. Call `restore()` to bring back the last session.
-    init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil, sites: SiteSettings = SiteSettings(directory: nil)) {
+    init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil, sites: SiteSettings = SiteSettings(directory: nil),
+         history: History? = nil, bookmarks: Bookmarks? = nil) {
         self.storage = storage
         self.sites = sites
+        self.history = history
+        self.bookmarks = bookmarks
         var collection = TabCollection(spaces: spaces)
         collection.create(url: nil)
         self.collection = collection
@@ -227,6 +233,18 @@ final class BrowserModel {
             if let url { $0.url = url }
             if let title { $0.title = title }
         }
+        if let url, !privateIDs.contains(id), Library.keepsHistory { history?.record(url: url, title: title) }
+    }
+
+    // MARK: Bookmarks
+
+    var isBookmarked: Bool { active.url.map { bookmarks?.contains($0) ?? false } ?? false }
+
+    /// Bookmarks the page in front of you, or removes its bookmark. A bookmark is the user's own choice, so it
+    /// works in private tabs too (and is the one thing a private tab leaves behind).
+    func toggleBookmark() {
+        guard let url = active.url, let bookmarks else { return }
+        bookmarks.toggle(title: active.displayTitle, url: url)
     }
 
     /// Tabs whose title or address contains the text, for the command bar.
