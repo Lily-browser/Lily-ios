@@ -9,7 +9,7 @@ check() { # check "rule" "regex" files...
   local hits; hits="$(grep -nE -- "$regex" "$@" 2>/dev/null || true)"
   if [ -n "$hits" ]; then echo "✘ $rule" >&2; printf '%s\n' "$hits" | sed 's/^/    /' >&2; failures=$((failures + 1)); else echo "✔ $rule"; fi
 }
-SWIFT=(); while IFS= read -r f; do SWIFT+=("$f"); done < <(git ls-files 'Sources/*.swift' 'Tests/*.swift')
+SWIFT=(); while IFS= read -r f; do SWIFT+=("$f"); done < <(git ls-files 'Sources/*.swift' 'Share/*.swift' 'Shared/*.swift' 'Tests/*.swift')
 CFG=(); while IFS= read -r f; do CFG+=("$f"); done < <(git ls-files 'project.yml' 'Makefile')
 
 check "no print/NSLog/debugPrint/dump (use os.Logger)" '(^|[^.[:alnum:]_])(print|NSLog|debugPrint|dump)\(' "${SWIFT[@]}"

@@ -2,4 +2,4 @@
 // OU field of your "Apple Development" certificate). A free Apple ID works.
 DEVELOPMENT_TEAM = XXXXXXXXXX
 // Bundle ids are claimed per team; pick one that is free for your account.
-PRODUCT_BUNDLE_IDENTIFIER = dev.lily.browser.ios.yourname
+LILY_BUNDLE_ID = dev.lily.browser.ios.yourname // the Share extension becomes <id>.share

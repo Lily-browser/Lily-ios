@@ -21,9 +21,12 @@ private struct WindowRoot: View {
     var body: some View {
         if let model {
             BrowserView(model: model)
+                .onOpenURL { link in if let page = LilyLink.page(from: link) { model.open(page) } }
                 .onChange(of: scenePhase) { _, phase in if phase == .background { Task { await Library.flush() } } }
         } else {
-            Color(.systemBackground).ignoresSafeArea().task { await Blocking.prepare(); await Sites.load(); await Library.load(); makeModel() }
+            Color(.systemBackground).ignoresSafeArea()
+                .onOpenURL { link in if let page = LilyLink.page(from: link) { WindowSeed.pending.append(page) } } // the window isn't ready yet
+                .task { await Blocking.prepare(); await Sites.load(); await Library.load(); makeModel() }
         }
     }
 

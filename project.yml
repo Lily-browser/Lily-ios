@@ -20,9 +20,10 @@ targets:
   Lily:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources: [Sources, Shared]
     dependencies:
       - package: LilyKit
+      - target: LilyShare
     info:
       path: Sources/Info.plist
       properties:
@@ -32,16 +33,40 @@ targets:
         NSMicrophoneUsageDescription: Websites you allow can use the microphone, for example for calls and voice messages.
         NSLocationWhenInUseUsageDescription: Websites you allow can ask for your location, for example for maps.
         ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.lily.browser.ios.link
+            CFBundleURLSchemes: [lily]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.lily.browser.ios # overridable in Config/Local.xcconfig
+        PRODUCT_BUNDLE_IDENTIFIER: $(LILY_BUNDLE_ID) # default in Config/Base.xcconfig, overridable in Config/Local.xcconfig
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  LilyShare:
+    type: app-extension
+    platform: iOS
+    sources: [Share, Shared]
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Lily
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LILY_BUNDLE_ID).share
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
   LilyTests:
     type: bundle.unit-test
     platform: iOS
@@ -50,7 +75,7 @@ targets:
       - target: Lily
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.lily.browser.ios.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(LILY_BUNDLE_ID).tests
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   Lily:

@@ -1,2 +1,5 @@
+// The app's bundle id; the Share extension is "<id>.share". Override LILY_BUNDLE_ID in Local.xcconfig.
+LILY_BUNDLE_ID = dev.lily.browser.ios
+
 // Optional per-developer settings (gitignored): copy Config/Local.xcconfig.example to Config/Local.xcconfig.
 #include? "Local.xcconfig"
