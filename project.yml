@@ -6,7 +6,7 @@ options:
 packages:
   LilyKit:
     url: https://github.com/Lily-browser/LilyKit.git
-    exactVersion: 0.1.0
+    exactVersion: 0.2.0
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig

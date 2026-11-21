@@ -1,5 +1,7 @@
+import CryptoKit
 import Foundation
 import Testing
+import LilyKit
 @testable import Lily
 
 @MainActor
@@ -69,27 +71,51 @@ struct BrowserModelTests {
 
 @MainActor
 struct SessionTests {
-    private func tempFile() -> SessionFile {
-        SessionFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("lily-test-\(UUID().uuidString)/session.json"))
+    private struct Keys: KeyStore {
+        func key(named name: String) async throws -> SymmetricKey { SymmetricKey(data: Data(repeating: 3, count: 32)) }
+        func deleteKey(named name: String) async throws {}
     }
+    private func tempDir() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent("lily-test-\(UUID().uuidString)") }
 
-    @Test func snapshotRoundTripsThroughTheFile() {
-        let file = tempFile()
+    @Test func sessionRoundTripsThroughSealedStorageAndRestores() async {
+        let dir = tempDir()
+        let storage = SessionStorage(directory: dir, keys: Keys())
         let model = BrowserModel()
         model.pageChanged(model.activeID, url: URL(string: "https://example.com"), title: "Example")
-        file.write(model.snapshot)
-        #expect(file.load() == model.snapshot)
-        file.delete()
-        #expect(file.load() == nil)
+        await storage.save(model.snapshot)
+        let fresh = BrowserModel(storage: storage)
+        await fresh.restore()
+        #expect(fresh.snapshot == model.snapshot)
     }
 
-    @Test func aSnapshotWithAnUnknownSpaceIsRejected() {
+    @Test func aLateRestoreDoesNotClobberBrowsing() async {
+        let dir = tempDir()
+        let storage = SessionStorage(directory: dir, keys: Keys())
+        let old = BrowserModel()
+        old.newTab()
+        await storage.save(old.snapshot)
+        let fresh = BrowserModel(storage: storage)
+        fresh.go(to: "https://example.org")
+        await fresh.restore()
+        #expect(fresh.tabs.count == 1)
+    }
+
+    @Test func plaintextSessionsFromEarlierBuildsAreSealedAndRemoved() async throws {
+        let dir = tempDir()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let model = BrowserModel()
-        var snapshot = model.snapshot
+        model.pageChanged(model.activeID, url: URL(string: "https://example.com/?t=secret"), title: "X")
+        try JSONEncoder().encode(model.snapshot).write(to: dir.appendingPathComponent("session.json"))
+        let storage = SessionStorage(directory: dir, keys: Keys())
+        #expect(await storage.load() == model.snapshot)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("session.json").path))
+        #expect(await storage.load() == model.snapshot)
+    }
+
+    @Test func aSnapshotWithAnUnknownSpaceIsInvalid() {
+        var snapshot = BrowserModel().snapshot
         snapshot.tabs[0].spaceID = UUID()
-        let file = tempFile()
-        file.write(snapshot)
-        #expect(file.load() == nil)
+        #expect(!snapshot.isValid)
     }
 
     @Test func renameAndRecolorKeepASpaceUsable() {

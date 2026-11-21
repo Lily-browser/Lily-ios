@@ -25,7 +25,8 @@ private struct WindowRoot: View {
 
     private func makeModel() {
         let primary = WindowSeed.claimPrimary()
-        let made = BrowserModel(file: primary ? .standard : nil)
+        let made = BrowserModel(storage: primary ? .standard : nil)
+        if primary { Task { await made.restore() } }
         if let url = WindowSeed.pending.first { WindowSeed.pending.removeFirst(); made.go(to: url.absoluteString) }
         model = made
     }
