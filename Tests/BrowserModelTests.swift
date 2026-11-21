@@ -4,11 +4,11 @@ import Testing
 
 @MainActor
 struct BrowserModelTests {
-    @Test func startsWithOneEmptyTab() {
+    @Test func startsWithOneEmptyTabInTheFirstSpace() {
         let model = BrowserModel()
         #expect(model.tabs.count == 1)
-        #expect(model.active.url == nil)
-        #expect(model.active.displayTitle == "New Tab")
+        #expect(model.active.url == nil && model.active.displayTitle == "New Tab")
+        #expect(model.active.spaceID == model.currentSpaceID)
     }
 
     @Test func typedHostBecomesHTTPSAndSearchBecomesSearchURL() {
@@ -30,16 +30,84 @@ struct BrowserModelTests {
         #expect(model.activeID == first)
     }
 
-    @Test func closingTheLastTabLeavesAFreshOne() {
+    @Test func closingTheLastTabInASpaceLeavesAFreshOne() {
         let model = BrowserModel()
         let only = model.activeID
         model.close(only)
         #expect(model.tabs.count == 1 && model.activeID != only)
     }
 
-    @Test func pageChangesUpdateTheTitleShown() {
+    @Test func spacesKeepTheirOwnTabsAndRememberTheActiveOne() {
         let model = BrowserModel()
-        model.pageChanged(model.activeID, url: URL(string: "https://example.com/a"), title: "Example")
+        let personal = model.currentSpaceID
+        model.newTab()
+        let personalActive = model.activeID
+        model.selectSpace(model.spaces[1].id)
+        #expect(model.currentSpaceID != personal)
+        #expect(model.regularTabs.count == 1 && model.active.spaceID == model.currentSpaceID)
+        model.selectSpace(personal)
+        #expect(model.activeID == personalActive)
+        #expect(model.regularTabs.count == 2)
+    }
+
+    @Test func pinningMovesATabToThePinnedGrid() {
+        let model = BrowserModel()
+        model.togglePin(model.activeID)
+        #expect(model.pinnedTabs.count == 1 && model.regularTabs.isEmpty)
+        model.togglePin(model.activeID)
+        #expect(model.pinnedTabs.isEmpty && model.regularTabs.count == 1)
+    }
+
+    @Test func pageChangesUpdateTheTitleAndAddressShown() {
+        let model = BrowserModel()
+        model.pageChanged(model.activeID, url: URL(string: "https://www.example.com/a"), title: "Example")
         #expect(model.active.displayTitle == "Example")
+        #expect(model.active.shortAddress == "example.com/a")
+        #expect(model.matches("exam").count == 1)
+    }
+}
+
+@MainActor
+struct SessionTests {
+    private func tempFile() -> SessionFile {
+        SessionFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("lily-test-\(UUID().uuidString)/session.json"))
+    }
+
+    @Test func snapshotRoundTripsThroughTheFile() {
+        let file = tempFile()
+        let model = BrowserModel()
+        model.pageChanged(model.activeID, url: URL(string: "https://example.com"), title: "Example")
+        file.write(model.snapshot)
+        #expect(file.load() == model.snapshot)
+        file.delete()
+        #expect(file.load() == nil)
+    }
+
+    @Test func aSnapshotWithAnUnknownSpaceIsRejected() {
+        let model = BrowserModel()
+        var snapshot = model.snapshot
+        snapshot.tabs[0].spaceID = UUID()
+        let file = tempFile()
+        file.write(snapshot)
+        #expect(file.load() == nil)
+    }
+
+    @Test func renameAndRecolorKeepASpaceUsable() {
+        let model = BrowserModel()
+        let space = model.currentSpace
+        model.rename(space, to: "  Home  ")
+        model.recolor(space, to: "#FF375F")
+        #expect(model.currentSpace.name == "Home" && model.currentSpace.colorHex == "#FF375F")
+        model.rename(space, to: "   ")
+        #expect(model.currentSpace.name == "Home")
+    }
+
+    @Test func closeOthersKeepsPinnedAndTheChosenTab() {
+        let model = BrowserModel()
+        let keep = model.activeID
+        model.newTab(); model.newTab()
+        model.togglePin(model.activeID)
+        model.closeOthers(keeping: keep)
+        #expect(model.regularTabs.map(\.id) == [keep] && model.pinnedTabs.count == 1)
     }
 }

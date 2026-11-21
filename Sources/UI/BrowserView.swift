@@ -2,60 +2,189 @@ import SwiftUI
 
 struct BrowserView: View {
     @Bindable var model: BrowserModel
-    @State private var address = ""
-    @State private var showingTabs = false
-    @FocusState private var addressFocused: Bool
+    @State private var web = WebController()
+    @State private var snapshots = SnapshotCache()
+    @State private var showingCommandBar = false
+    @State private var showingSidebar = false
+    @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
+    @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
-        VStack(spacing: 0) {
+        if sizeClass == .regular { regularBody } else { compactBody }
+    }
+
+    // MARK: iPad, unfolded foldables, wide windows: the Mac's sidebar plus a system toolbar
+
+    private var regularBody: some View {
+        ZStack {
+            NavigationSplitView(columnVisibility: $columns) {
+                SidebarView(model: model, snapshots: snapshots)
+                    .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 360)
+            } detail: {
+                NavigationStack {
+                    ZStack {
+                        SpaceBackdrop(colorHex: model.currentSpace.colorHex)
+                        pageCard.padding(.horizontal, 10).padding(.bottom, 10)
+                    }
+                    .toolbar { regularToolbar }
+                    .toolbarTitleDisplayMode(.inline)
+                }
+            }
+            .accessibilityHidden(showingCommandBar)
+            if showingCommandBar {
+                CommandBar(model: model) { showingCommandBar = false }
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .tint(Color(hex: accent))
+        .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: showingCommandBar)
+    }
+
+    @ToolbarContentBuilder private var regularToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button { web.goBack() } label: { Image(systemName: "chevron.left") }
+                .disabled(!web.canGoBack).keyboardShortcut("[", modifiers: .command).accessibilityLabel("Back")
+            Button { web.goForward() } label: { Image(systemName: "chevron.right") }
+                .disabled(!web.canGoForward).keyboardShortcut("]", modifiers: .command).accessibilityLabel("Forward")
+            Button { web.reload() } label: { Image(systemName: "arrow.clockwise") }
+                .disabled(model.active.url == nil).keyboardShortcut("r", modifiers: .command).accessibilityLabel("Reload")
+        }
+        ToolbarItem(placement: .principal) {
+            addressPill.frame(minWidth: 280, maxWidth: 560).keyboardShortcut("l", modifiers: .command)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            if let url = model.active.url { ShareLink(item: url) }
+            Button { model.newTab(); showingCommandBar = true } label: { Image(systemName: "plus") }
+                .accessibilityLabel("New Tab")
+        }
+    }
+
+    // MARK: iPhone and other compact windows: bottom bar, tab overview sheet
+
+    private var compactBody: some View {
+        ZStack {
+            SpaceBackdrop(colorHex: model.currentSpace.colorHex)
+            VStack(spacing: 10) {
+                pageCard
+                if !web.chromeHidden { bottomBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+            .padding(.bottom, web.chromeHidden ? 0 : 6)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: web.chromeHidden)
+            .accessibilityHidden(showingCommandBar)
+            if showingCommandBar {
+                CommandBar(model: model) { showingCommandBar = false }
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .tint(Color(hex: accent))
+        .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: showingCommandBar)
+        .sheet(isPresented: $showingSidebar) {
+            TabOverview(model: model, snapshots: snapshots) { showingSidebar = false }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .tint(Color(hex: accent))
+                .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
+        }
+    }
+
+    private var pageCard: some View {
+        ZStack {
+            Color(.systemBackground)
             if model.active.url == nil {
-                StartPage()
+                StartPage(space: model.currentSpace)
             } else {
-                WebView(tab: model.active) { id, url, title in model.pageChanged(id, url: url, title: title) }
+                WebView(tab: model.active, controller: web, snapshots: snapshots) { id, url, title in model.pageChanged(id, url: url, title: title) }
                     .id(model.activeID)
             }
-            Divider()
-            bar
         }
-        .onChange(of: model.activeID) { syncAddress() }
-        .onChange(of: model.active.url) { syncAddress() }
-        .sheet(isPresented: $showingTabs) { TabSwitcher(model: model) { showingTabs = false } }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.pageRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
     }
 
-    private var bar: some View {
-        HStack(spacing: 12) {
-            TextField("Search or enter address", text: $address)
-                .textFieldStyle(.roundedBorder)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.webSearch)
-                .submitLabel(.go)
-                .focused($addressFocused)
-                .onSubmit { model.go(to: address); addressFocused = false }
-            Button { showingTabs = true } label: {
-                Image(systemName: "square.on.square").accessibilityLabel("Tabs")
-            }
-            Button { model.newTab() } label: {
-                Image(systemName: "plus").accessibilityLabel("New Tab")
-            }
+    /// One glass group (iOS 26+): the buttons and the address pill share a container so they blend and
+    /// morph together instead of stacking separate blurs.
+    @ViewBuilder private var bottomBar: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) { barContent }
+        } else {
+            barContent
         }
-        .padding(.horizontal).padding(.vertical, 8)
-        .background(.bar)
     }
 
-    private func syncAddress() {
-        guard !addressFocused else { return }
-        address = model.active.url?.absoluteString ?? ""
+    private var barContent: some View {
+        HStack(spacing: 8) {
+            barButton("chevron.left", "Back", enabled: web.canGoBack) { web.goBack() }
+            addressPill
+            barButton("square.on.square", "Tabs and spaces", enabled: true) {
+                Task {
+                    if let image = await web.snapshot() { snapshots.set(image, for: model.activeID) }
+                    showingSidebar = true
+                }
+            }
+            barButton("plus", "New Tab", enabled: true) { model.newTab(); showingCommandBar = true }
+        }
+    }
+
+    private var addressPill: some View {
+        Button { showingCommandBar = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: model.active.url == nil ? "magnifyingglass" : "lock.fill").font(.caption.weight(.semibold))
+                Text(model.active.shortAddress.isEmpty ? "Search or enter address" : model.active.shortAddress)
+                    .font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.middle)
+            }
+            .foregroundStyle(model.active.url == nil ? .secondary : .primary)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .chrome(Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(model.active.shortAddress.isEmpty ? "Search or enter address" : "Address, \(model.active.shortAddress)")
+        .accessibilityHint("Opens the search field")
+        .contextMenu {
+            if let url = model.active.url {
+                ShareLink(item: url)
+                Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
+                Button("Reload", systemImage: "arrow.clockwise") { web.reload() }
+            }
+        }
+    }
+
+    private func barButton(_ symbol: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.callout.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .chrome(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.6))
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }
 
 private struct StartPage: View {
+    let space: Space
+    @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
+    @ScaledMetric(relativeTo: .largeTitle) private var leaf: CGFloat = 54
+
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "leaf").font(.system(size: 56)).foregroundStyle(.tint)
+            Image(systemName: "leaf.fill").font(.system(size: leaf)).foregroundStyle(Color(hex: accentHex)).accessibilityHidden(true)
             Text("Lily").font(.largeTitle.weight(.semibold))
-            Text("Private by design.").foregroundStyle(.secondary)
+            Label(space.name, systemImage: space.symbol)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: space.colorHex))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
