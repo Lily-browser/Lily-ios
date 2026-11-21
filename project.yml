@@ -6,7 +6,7 @@ options:
 packages:
   LilyKit:
     url: https://github.com/Lily-browser/LilyKit.git
-    exactVersion: 0.3.2
+    exactVersion: 0.4.0
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
@@ -28,10 +28,6 @@ targets:
       properties:
         CFBundleDisplayName: Lily
         UILaunchScreen: {}
-        NSCameraUsageDescription: Websites you allow can use the camera, for example for video calls.
-        NSMicrophoneUsageDescription: Websites you allow can use the microphone, for example for calls and voice messages.
-        NSLocationWhenInUseUsageDescription: Websites you allow can ask for your location, for example for maps.
-        ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]

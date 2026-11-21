@@ -9,6 +9,8 @@ struct BrowserActions {
     let newPrivateTab: () -> Void
     let toggleSidebar: () -> Void
     let splitWithNext: () -> Void
+    let toggleBookmark: () -> Void
+    let showLibrary: (LibraryView.Section) -> Void
 }
 
 private struct BrowserActionsKey: FocusedValueKey { typealias Value = BrowserActions }
@@ -62,7 +64,14 @@ struct LilyCommands: Commands {
             Button("Zoom Out") { if let a = actions { a.model.zoomStep(for: a.model.active.url, in: false) } }.keyboardShortcut("-").disabled(actions == nil)
             Button("Actual Size") { if let a = actions { a.model.resetZoom(for: a.model.active.url) } }.keyboardShortcut("0").disabled(actions == nil)
         }
+        CommandMenu("Bookmarks") {
+            Button("Bookmark This Page") { actions?.toggleBookmark() }.keyboardShortcut("d", modifiers: [.command, .shift]).disabled(actions == nil)
+            Button("Show Bookmarks") { actions?.showLibrary(.bookmarks) }.keyboardShortcut("b", modifiers: [.command, .option]).disabled(actions == nil)
+        }
         CommandMenu("History") {
+            Button("Show History") { actions?.showLibrary(.history) }.keyboardShortcut("y").disabled(actions == nil)
+            Button("Show Downloads") { actions?.showLibrary(.downloads) }.keyboardShortcut("l", modifiers: [.command, .option]).disabled(actions == nil)
+            Divider()
             Button("Back") { actions?.web.goBack() }.keyboardShortcut("[").disabled(!(actions?.web.canGoBack ?? false))
             Button("Forward") { actions?.web.goForward() }.keyboardShortcut("]").disabled(!(actions?.web.canGoForward ?? false))
         }

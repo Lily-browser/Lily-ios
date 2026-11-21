@@ -7,6 +7,7 @@ struct TabOverview: View {
     let snapshots: SnapshotCache
     let dismiss: () -> Void
     @State private var showingSettings = false
+    @State private var library: LibraryView.Section?
     @AppStorage(Settings.accentKey) private var accentHex = Theme.accentHex
     @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = 150
 
@@ -29,6 +30,7 @@ struct TabOverview: View {
             SpaceSwitcher(model: model).padding(.bottom, 8)
         }
         .sheet(isPresented: $showingSettings) { SettingsView(model: model, snapshots: snapshots) }
+        .sheet(item: $library) { section in LibraryView(model: model, section: section) }
     }
 
     private var header: some View {
@@ -41,6 +43,10 @@ struct TabOverview: View {
             Text("\(model.pinnedTabs.count + model.regularTabs.count)").font(.subheadline).foregroundStyle(.secondary)
                 .accessibilityLabel("\(model.pinnedTabs.count + model.regularTabs.count) tabs")
             Spacer()
+            Button { library = .bookmarks } label: {
+                Image(systemName: "book").frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Bookmarks and History")
             Button { showingSettings = true } label: {
                 Image(systemName: "gearshape").frame(width: 44, height: 44).contentShape(Rectangle())
             }

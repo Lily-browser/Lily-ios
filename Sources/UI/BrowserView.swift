@@ -7,6 +7,7 @@ struct BrowserView: View {
     @State private var showingCommandBar = false
     @State private var showingSidebar = false
     @State private var showingSiteSettings = false
+    @State private var library: LibraryView.Section?
     @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
     @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -30,7 +31,9 @@ struct BrowserView: View {
                 newTab: { model.newTab(); showingCommandBar = true },
                 newPrivateTab: { model.newPrivateTab(); showingCommandBar = true },
                 toggleSidebar: { columns = columns == .detailOnly ? .all : .detailOnly },
-                splitWithNext: splitWithNext))
+                splitWithNext: splitWithNext,
+                toggleBookmark: { model.toggleBookmark() },
+                showLibrary: { library = $0 }))
     }
 
     /// ⌃⌘1: show the next tab beside this one, or a new tab if there is only one.
@@ -90,7 +93,12 @@ struct BrowserView: View {
                 Button { splitWithNext() } label: { Image(systemName: "rectangle.split.2x1") }
                     .accessibilityLabel("Split View")
             }
-            if let url = model.active.url { ShareLink(item: url) }
+            if let url = model.active.url {
+                Button { model.toggleBookmark() } label: { Image(systemName: model.isBookmarked ? "star.fill" : "star") }
+                    .accessibilityLabel(model.isBookmarked ? "Remove Bookmark" : "Add Bookmark")
+                ShareLink(item: url)
+            }
+            Button { library = .bookmarks } label: { Image(systemName: "book") }.accessibilityLabel("Bookmarks and History")
             Button { model.newTab(); showingCommandBar = true } label: { Image(systemName: "plus") }
                 .accessibilityLabel("New Tab")
                 .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); showingCommandBar = true } }
@@ -240,10 +248,13 @@ struct BrowserView: View {
         .contextMenu {
             if let url = model.active.url {
                 ShareLink(item: url)
+                Button(model.isBookmarked ? "Remove Bookmark" : "Add Bookmark", systemImage: model.isBookmarked ? "star.slash" : "star") { model.toggleBookmark() }
                 Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
                 Button("Reload", systemImage: "arrow.clockwise") { web.reload() }
                 Button("Website Settings…", systemImage: "slider.horizontal.3") { showingSiteSettings = true }
             }
+            Button("Bookmarks", systemImage: "book") { library = .bookmarks }
+            Button("History", systemImage: "clock") { library = .history }
         }
     }
 
