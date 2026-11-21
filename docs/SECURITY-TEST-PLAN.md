@@ -120,7 +120,7 @@ Background the app with (a) a normal tab, (b) a private tab. Open the app switch
 *Pass:* with only a system-trusted CA, Lily's own list downloads work (they use the system trust, so a user-installed CA will work: expected); at idle there are **no** requests except documented ones (list updates). No analytics, no identifiers in headers, a generic User-Agent. *Fail (High):* any unexpected host contacted, or a plaintext HTTP request.
 
 ### C-8. URL schemes, Handoff, share, drag
-Send Lily links from Safari, Messages, Mail and AirDrop; try `lily://`-like custom schemes (none registered, expected). Drag a link between windows on iPad. *Pass:* only `http(s)` open; nothing runs automatically; a malformed link does nothing.
+Send Lily links from Safari, Messages, Mail and AirDrop; use the Share extension ("Lily" in the share sheet) on a page, a link, and a non-web item. The app registers one scheme, `lily://open?url=<http(s) page>`: try it with `javascript:`, `file:`, `data:`, another host (`lily://settings`), a 10 KB address and a malformed query (`LilyLinkTests` covers the logic; do it for real on the device). Drag a link between windows on iPad. *Pass:* only `http(s)` open; nothing runs automatically; a malformed link does nothing.
 
 ### C-9. Binary hardening
 `otool -hv`, `otool -Iv | grep stack_chk`, `codesign -dvvv --entitlements -`, `strings -a Lily | grep -iE "http|key|token|secret|password"`.
@@ -145,7 +145,8 @@ in `Tests/` (or a LilyKit test when the cause is in the kit). Keep a table at th
 | 2026-11-21 | B-8 | Medium: the app switcher snapshot and tab thumbnails could show a private page | Fixed: cover while inactive, no thumbnails for private tabs |
 | 2026-11-21 | B-10 | Low: JavaScript alert/confirm/prompt were silently dropped | Fixed: system dialogs naming the site, three per page load |
 | 2026-11-21 | A-5 | Low (LilyKit): filter-list size is checked after the whole body is downloaded | Open: lists come from fixed hosts, so this needs a compromised list host; stream with a cap |
-| 2026-11-21 | A-8 | Low: Dependabot and secret scanning off on this repo | Open: waiting for the owner's go-ahead |
+| 2026-11-21 | A-2 | Medium (regression I introduced): the library PR dropped the usage strings from `project.yml`; regenerating would have removed them | Fixed in #20, and lint now fails if any is missing |
+| 2026-11-21 | A-8 | Low: Dependabot and secret scanning off on this repo | Fixed: Dependabot alerts, secret scanning and push protection on (all three repos); Dependabot config for Actions pins added |
 
 Not yet run live: B-3 to B-7 and B-11 to B-12 are covered by unit tests of the decisions only; run them against real pages (and C-6, C-7 on the device).
 
