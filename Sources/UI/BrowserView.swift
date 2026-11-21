@@ -11,6 +11,8 @@ struct BrowserView: View {
     @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    private let downloads = Downloads.shared
     @State private var columns = NavigationSplitViewVisibility.all
 
     /// The controller of the focused page (the one the toolbar and shortcuts drive).
@@ -18,6 +20,10 @@ struct BrowserView: View {
 
     var body: some View {
         Group { if sizeClass == .regular { regularBody } else { compactBody } }
+            .overlay { if scenePhase != .active, model.isPrivate(model.activeID) || model.splitTab.map({ model.isPrivate($0.id) }) == true { PrivacyCover() } }
+            .sheet(item: Binding(get: { downloads.finished }, set: { downloads.finished = $0 })) { item in
+                if let url = item.fileURL { ExportPicker(url: url) }
+            }
             .focusedSceneValue(\.browserActions, BrowserActions(
                 model: model, web: web,
                 focusAddress: { showingCommandBar = true },
@@ -207,7 +213,7 @@ struct BrowserView: View {
             addressPill
             barButton("square.on.square", "Tabs and spaces", enabled: true) {
                 Task {
-                    if let image = await web.snapshot() { snapshots.set(image, for: model.activeID) }
+                    if !model.isPrivate(model.activeID), let image = await web.snapshot() { snapshots.set(image, for: model.activeID) }
                     showingSidebar = true
                 }
             }

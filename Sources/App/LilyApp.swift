@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct LilyApp: App {
+    init() { Downloads.purge() }
+
     var body: some Scene {
         WindowGroup(id: WindowSeed.id) {
             WindowRoot()

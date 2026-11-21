@@ -136,7 +136,18 @@ in `Tests/` (or a LilyKit test when the cause is in the kit). Keep a table at th
 
 | Date | Test | Result | Finding / PR |
 |---|---|---|---|
-| | | | |
+| 2026-11-21 | A-1, A-4 | Medium: no navigation policy. Links to `file:`, `data:` (as the page) and `itms-services:` were not decided anywhere, and `tel:`/`mailto:` never worked | Fixed: `NavigationPolicy` (unit-tested), calls and mail only from a tap |
+| 2026-11-21 | A-4 | Low: the address bar and restored tabs accepted `file:` and `data:` addresses (the shared resolver allows them) | Fixed: tabs only load `http(s)` and `about:blank` |
+| 2026-11-21 | A-2, B-7 | Medium: no camera, microphone or location usage strings, so a page asking for the camera could end the app | Fixed: strings added; the system asks per site |
+| 2026-11-21 | B-4 | Medium: `window.open` from a script opened an unlimited number of tabs | Fixed: one per page load; taps are unlimited |
+| 2026-11-21 | B-5 | Medium: no download handling (attachments silently failed) | Fixed: `Downloads` (own folder per file, safe names, 2 GB cap, Save to Files, purged at launch) |
+| 2026-11-21 | B-6 | Medium: a failed load or a bad certificate showed a blank page, and an HTTPS-first failure had no way forward | Fixed: error page; HTTP only after asking, never for certificate errors; redirect loops broken |
+| 2026-11-21 | B-8 | Medium: the app switcher snapshot and tab thumbnails could show a private page | Fixed: cover while inactive, no thumbnails for private tabs |
+| 2026-11-21 | B-10 | Low: JavaScript alert/confirm/prompt were silently dropped | Fixed: system dialogs naming the site, three per page load |
+| 2026-11-21 | A-5 | Low (LilyKit): filter-list size is checked after the whole body is downloaded | Open: lists come from fixed hosts, so this needs a compromised list host; stream with a cap |
+| 2026-11-21 | A-8 | Low: Dependabot and secret scanning off on this repo | Open: waiting for the owner's go-ahead |
+
+Not yet run live: B-3 to B-7 and B-11 to B-12 are covered by unit tests of the decisions only; run them against real pages (and C-6, C-7 on the device).
 
 ## 7. Order of work
 
