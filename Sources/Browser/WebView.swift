@@ -1,4 +1,5 @@
 import SwiftUI
+import LilyKit
 import WebKit
 import Observation
 
@@ -54,13 +55,25 @@ struct WebView: UIViewRepresentable {
     let controller: WebController
     let snapshots: SnapshotCache
     var zoom: Double = 1
+    var site: SiteSettings.Site = SiteSettings.Site()
+    var isPrivate = false
     let onChange: @MainActor (UUID, URL?, String?) -> Void
     var onOpen: @MainActor (URL) -> Void = { _ in }
+
+    /// "Dark" and "Force Dark" both ask the page for its dark theme; iOS has no inverting mode.
+    static func style(_ mode: SiteSettings.DarkMode?) -> UIUserInterfaceStyle {
+        switch mode ?? .standard { case .standard: .unspecified; case .dark, .forced: .dark; case .light: .light }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(controller: controller, snapshots: snapshots, onChange: onChange, onOpen: onOpen) }
 
     func makeUIView(context: Context) -> WKWebView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = site.javaScript ?? true
+        if isPrivate { configuration.websiteDataStore = PrivateBrowsing.store }
+        let web = WKWebView(frame: .zero, configuration: configuration)
+        Blocking.configure(web, adsAllowed: site.adsAllowed ?? false)
+        web.overrideUserInterfaceStyle = Self.style(site.darkMode)
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
@@ -69,6 +82,7 @@ struct WebView: UIViewRepresentable {
         web.isOpaque = false
         web.backgroundColor = .clear
         context.coordinator.tabID = tab.id
+        context.coordinator.adsAllowed = site.adsAllowed ?? false
         controller.web = web
         context.coordinator.watchScrolling(of: web)
         controller.setChromeHidden(false)
@@ -80,6 +94,15 @@ struct WebView: UIViewRepresentable {
         context.coordinator.tabID = tab.id
         controller.web = web
         if web.pageZoom != zoom { web.pageZoom = zoom }
+        web.overrideUserInterfaceStyle = Self.style(site.darkMode)
+        // JavaScript and ad lists apply from the next load, so changing them reloads the page once.
+        let js = site.javaScript ?? true, ads = site.adsAllowed ?? false
+        if web.configuration.defaultWebpagePreferences.allowsContentJavaScript != js || context.coordinator.adsAllowed != ads {
+            web.configuration.defaultWebpagePreferences.allowsContentJavaScript = js
+            context.coordinator.adsAllowed = ads
+            Blocking.configure(web, adsAllowed: ads)
+            web.reload()
+        }
         if let url = tab.url, web.url != url, context.coordinator.lastRequested != url {
             context.coordinator.lastRequested = url
             web.load(URLRequest(url: url))
@@ -88,6 +111,7 @@ struct WebView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        var adsAllowed = false
         var tabID = UUID()
         var lastRequested: URL?
         private var scrollObservation: NSKeyValueObservation?

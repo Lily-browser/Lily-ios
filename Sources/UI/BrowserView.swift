@@ -6,6 +6,7 @@ struct BrowserView: View {
     @State private var snapshots = SnapshotCache()
     @State private var showingCommandBar = false
     @State private var showingSidebar = false
+    @State private var showingSiteSettings = false
     @AppStorage(Settings.accentKey) private var accent = Theme.accentHex
     @AppStorage(Settings.modeKey) private var mode = Settings.Mode.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -21,6 +22,7 @@ struct BrowserView: View {
                 model: model, web: web,
                 focusAddress: { showingCommandBar = true },
                 newTab: { model.newTab(); showingCommandBar = true },
+                newPrivateTab: { model.newPrivateTab(); showingCommandBar = true },
                 toggleSidebar: { columns = columns == .detailOnly ? .all : .detailOnly },
                 splitWithNext: splitWithNext))
     }
@@ -85,6 +87,7 @@ struct BrowserView: View {
             if let url = model.active.url { ShareLink(item: url) }
             Button { model.newTab(); showingCommandBar = true } label: { Image(systemName: "plus") }
                 .accessibilityLabel("New Tab")
+                .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); showingCommandBar = true } }
         }
     }
 
@@ -111,6 +114,11 @@ struct BrowserView: View {
         .tint(Color(hex: accent))
         .preferredColorScheme(Settings.Mode(rawValue: mode)?.scheme)
         .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: showingCommandBar)
+        .sheet(isPresented: $showingSiteSettings) {
+            SiteSettingsSheet(model: model, url: model.active.url)
+                .presentationDetents([.medium])
+                .tint(Color(hex: accent))
+        }
         .sheet(isPresented: $showingSidebar) {
             TabOverview(model: model, snapshots: snapshots) { showingSidebar = false }
                 .presentationDetents([.large])
@@ -173,7 +181,7 @@ struct BrowserView: View {
                 StartPage(space: model.currentSpace)
             } else {
                 WebView(tab: tab, controller: controllers.controller(for: tab.id), snapshots: snapshots,
-                        zoom: model.zoom(for: tab.url),
+                        zoom: model.zoom(for: tab.url), site: model.sites.site(for: tab.url), isPrivate: model.isPrivate(tab.id),
                         onChange: { id, url, title in model.pageChanged(id, url: url, title: title) },
                         onOpen: { model.open($0) })
                     .id(tab.id)
@@ -204,6 +212,7 @@ struct BrowserView: View {
                 }
             }
             barButton("plus", "New Tab", enabled: true) { model.newTab(); showingCommandBar = true }
+                .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); showingCommandBar = true } }
         }
     }
 
@@ -227,6 +236,7 @@ struct BrowserView: View {
                 ShareLink(item: url)
                 Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
                 Button("Reload", systemImage: "arrow.clockwise") { web.reload() }
+                Button("Website Settings…", systemImage: "slider.horizontal.3") { showingSiteSettings = true }
             }
         }
     }

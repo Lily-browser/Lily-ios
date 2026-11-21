@@ -57,7 +57,10 @@ struct TabOverview: View {
                 TabCard(tab: tab, image: snapshots.images[tab.id], active: active, accentHex: accentHex, height: cardHeight)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(tab.displayTitle)
+            .overlay(alignment: .topLeading) {
+                if model.isPrivate(tab.id) { Image(systemName: "eye.slash").font(.caption.weight(.bold)).padding(8).accessibilityHidden(true) }
+            }
+            .accessibilityLabel(model.isPrivate(tab.id) ? "\(tab.displayTitle), private" : tab.displayTitle)
             .accessibilityAddTraits(active ? .isSelected : [])
             Button { snapshots.remove(tab.id); model.close(tab.id) } label: {
                 Image(systemName: "xmark").font(.caption2.weight(.bold)).padding(6)
@@ -81,6 +84,7 @@ struct TabOverview: View {
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
+        .contextMenu { Button("New Private Tab", systemImage: "eye.slash") { model.newPrivateTab(); dismiss() } }
     }
 
     private var pinnedStrip: some View {
