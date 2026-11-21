@@ -148,7 +148,17 @@ in `Tests/` (or a LilyKit test when the cause is in the kit). Keep a table at th
 | 2026-11-21 | A-2 | Medium (regression I introduced): the library PR dropped the usage strings from `project.yml`; regenerating would have removed them | Fixed in #20, and lint now fails if any is missing |
 | 2026-11-21 | A-8 | Low: Dependabot and secret scanning off on this repo | Fixed: Dependabot alerts, secret scanning and push protection on (all three repos); Dependabot config for Actions pins added |
 
-Not yet run live: B-3 to B-7 and B-11 to B-12 are covered by unit tests of the decisions only; run them against real pages (and C-6, C-7 on the device).
+Run live on the simulator (iPhone 17 Pro, iOS 26.5) through `xcrun simctl openurl booted "lily://open?url=…"`, which also exercises the `lily://` link:
+
+| Date | Test | Live result |
+|---|---|---|
+| 2026-11-21 | B-6 expired certificate (`expired.badssl.com`) | Error page "This connection isn't private", no bypass, address bar shows a warning, not a lock |
+| 2026-11-21 | B-6 HTTPS-first on a site with no HTTPS (`neverssl.com`) | Prompt "isn't available securely": Open with HTTP / Cancel. Found two bugs, fixed: a reset connection (-1005) didn't offer the prompt, and the attempt waited the system's 60 s (now 10 s) |
+| 2026-11-21 | B-5 attachment download (`httpbin.org/response-headers?Content-Disposition=attachment…`) | Save to Files sheet opens with the file |
+| 2026-11-21 | A-4 `lily://open?url=javascript:…` and `file:///…` | Ignored, no navigation |
+| 2026-11-21 | Address bar lock | Bug: a lock showed for HTTP and for the error page. Fixed: lock only for a loaded HTTPS page |
+
+Still to run live: B-3 (typed `data:`/`blob:`), B-4 (scripted pop-up flood, `tel:`), B-7 (camera/location prompts), B-9 to B-15, and C-1 to C-10 on the device.
 
 ## 7. Order of work
 

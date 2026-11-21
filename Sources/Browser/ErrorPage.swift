@@ -37,7 +37,7 @@ enum ErrorPage {
     /// Failures where trying plain HTTP is a fair question after an HTTPS upgrade: the host may simply not offer HTTPS.
     /// A bad certificate is never one of them.
     static func suggestsHTTPFallback(_ error: NSError) -> Bool {
-        error.domain == NSURLErrorDomain && [NSURLErrorCannotConnectToHost, NSURLErrorTimedOut, NSURLErrorSecureConnectionFailed].contains(error.code)
+        error.domain == NSURLErrorDomain && [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut, NSURLErrorSecureConnectionFailed].contains(error.code)
     }
 
     static func escape(_ text: String) -> String {

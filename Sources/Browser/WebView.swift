@@ -10,6 +10,9 @@ final class WebController {
     private(set) var canGoBack = false
     private(set) var canGoForward = false
     private(set) var isLoading = false
+    /// The page shown is Lily's error page, not the site (so the address bar shouldn't show a lock).
+    private(set) var showsError = false
+    func setShowsError(_ shows: Bool) { if showsError != shows { showsError = shows } }
     /// Phone layouts slide the bottom bar away while you read (scroll down) and bring it back on scroll up.
     private(set) var chromeHidden = false
     func setChromeHidden(_ hidden: Bool) { if chromeHidden != hidden { chromeHidden = hidden } }
@@ -87,7 +90,7 @@ struct WebView: UIViewRepresentable {
         controller.web = web
         context.coordinator.watchScrolling(of: web)
         controller.setChromeHidden(false)
-        if let url = tab.url, NavigationPolicy.isLoadable(url) { context.coordinator.lastRequested = url; web.load(URLRequest(url: url)) }
+        if let url = tab.url, NavigationPolicy.isLoadable(url) { context.coordinator.lastRequested = url; web.load(UpgradeLog.request(for: url)) }
         return web
     }
 
@@ -106,7 +109,7 @@ struct WebView: UIViewRepresentable {
         }
         if let url = tab.url, web.url != url, context.coordinator.lastRequested != url, NavigationPolicy.isLoadable(url) {
             context.coordinator.lastRequested = url
-            web.load(URLRequest(url: url))
+            web.load(UpgradeLog.request(for: url))
         }
     }
 
@@ -121,8 +124,8 @@ struct WebView: UIViewRepresentable {
         /// Pages may open one window without a tap and show a few dialogs per page load; the rest are ignored.
         private var scriptedPopups = 0
         private var dialogs = 0
-        /// Hosts this tab just sent over HTTPS, so a server that bounces back to HTTP can't loop us.
-        private var upgraded: [String: Date] = [:]
+        /// The navigation that is showing the error page (see `show`).
+        private var errorNavigation: WKNavigation?
         private let controller: WebController
         private let snapshots: SnapshotCache
         private let onChange: @MainActor (UUID, URL?, String?) -> Void
@@ -150,12 +153,12 @@ struct WebView: UIViewRepresentable {
                 return .cancel
             case .allow:
                 guard action.targetFrame?.isMainFrame == true, let host = url.host?.lowercased(), let secure = HTTPSFirst.upgrade(url) else { return .allow }
-                if let last = upgraded[host], Date().timeIntervalSince(last) < 10 {
+                if UpgradeLog.wasUpgraded(host, within: 10) {
                     HTTPSFirst.allowedHTTPHosts.insert(host) // this host sends HTTPS back to HTTP: stop trying
                     return .allow
                 }
-                upgraded[host] = Date()
-                webView.load(URLRequest(url: secure))
+                UpgradeLog.record(host)
+                webView.load(UpgradeLog.request(for: secure))
                 return .cancel
             }
         }
@@ -200,7 +203,7 @@ struct WebView: UIViewRepresentable {
             guard let message = ErrorPage.message(for: ns) else { return }
             let failing = (ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? web.url ?? lastRequested
             guard let failing, NavigationPolicy.isLoadable(failing), failing.scheme?.lowercased() != "about" else { return }
-            if failing.scheme?.lowercased() == "https", let host = failing.host?.lowercased(), upgraded[host] != nil,
+            if failing.scheme?.lowercased() == "https", let host = failing.host?.lowercased(), UpgradeLog.wasUpgraded(host),
                ErrorPage.suggestsHTTPFallback(ns), var parts = URLComponents(url: failing, resolvingAgainstBaseURL: false) {
                 parts.scheme = "http"
                 if let insecure = parts.url {
@@ -208,7 +211,12 @@ struct WebView: UIViewRepresentable {
                     return
                 }
             }
-            web.loadSimulatedRequest(URLRequest(url: failing), responseHTML: ErrorPage.html(message, address: failing))
+            showErrorPage(message, for: failing, in: web)
+        }
+
+        private func showErrorPage(_ message: ErrorPage.Message, for failing: URL, in web: WKWebView) {
+            errorNavigation = web.loadSimulatedRequest(URLRequest(url: failing), responseHTML: ErrorPage.html(message, address: failing))
+            controller.setShowsError(true)
         }
 
         /// HTTPS-First's rule: a site with no secure connection opens over HTTP only after you agree, for this run only.
@@ -220,7 +228,7 @@ struct WebView: UIViewRepresentable {
                 HTTPSFirst.allowedHTTPHosts.insert(host)
                 web.load(URLRequest(url: insecure))
             } else {
-                web.loadSimulatedRequest(URLRequest(url: fallback.1), responseHTML: ErrorPage.html(fallback.0, address: fallback.1))
+                showErrorPage(fallback.0, for: fallback.1, in: web)
             }
         }
 
@@ -261,7 +269,10 @@ struct WebView: UIViewRepresentable {
             }
         }
 
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { controller.sync() }
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            controller.setShowsError(navigation != nil && navigation === errorNavigation)
+            controller.sync()
+        }
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             scriptedPopups = 0
             dialogs = 0

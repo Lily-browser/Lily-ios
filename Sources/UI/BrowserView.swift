@@ -230,10 +230,17 @@ struct BrowserView: View {
         }
     }
 
+    /// A lock only for a secure page that loaded: not for HTTP, and not for Lily's own error page.
+    private var addressSymbol: String {
+        guard let url = model.active.url else { return "magnifyingglass" }
+        if web.showsError { return "exclamationmark.triangle.fill" }
+        return url.scheme?.lowercased() == "https" ? "lock.fill" : "lock.open.fill"
+    }
+
     private var addressPill: some View {
         Button { showingCommandBar = true } label: {
             HStack(spacing: 6) {
-                Image(systemName: model.active.url == nil ? "magnifyingglass" : "lock.fill").font(.caption.weight(.semibold))
+                Image(systemName: addressSymbol).font(.caption.weight(.semibold))
                 Text(model.active.shortAddress.isEmpty ? "Search or enter address" : model.active.shortAddress)
                     .font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.middle)
             }

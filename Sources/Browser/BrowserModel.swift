@@ -62,7 +62,10 @@ final class BrowserModel {
     func go(to input: String) {
         guard var url = Preferences.urlResolver.resolve(input) else { return }
         guard NavigationPolicy.isLoadable(url) else { return } // no file:, data: or other schemes from the address bar
-        if Preferences.httpsFirstEnabled { url = HTTPSFirst.upgrade(url) ?? url }
+        if Preferences.httpsFirstEnabled, let secure = HTTPSFirst.upgrade(url) {
+            if let host = url.host { UpgradeLog.record(host) } // a failed attempt gives up in 10 s and offers HTTP
+            url = secure
+        }
         if Preferences.flag(Preferences.Key.removeLinkTracking, default: true) { url = LinkTracking.cleaned(url) }
         update(activeID) { $0.url = url }
     }
