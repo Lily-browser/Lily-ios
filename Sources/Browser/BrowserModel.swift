@@ -2,21 +2,20 @@ import Foundation
 import LilyKit
 import Observation
 
-/// Spaces, their tabs and what's selected. The tab model and session storage are LilyKit's; this holds the
-/// iOS state the views need.
+/// What the views show and the iOS-only state around it. Tab order, selection, spaces, closing and the saved
+/// session are LilyKit's `TabCollection`, shared with the Mac; this adds Split View, private tabs, zoom and saving.
 @MainActor @Observable
 final class BrowserModel {
-    private(set) var spaces: [Space]
-    private(set) var currentSpaceID: UUID
-    private(set) var tabs: [TabItem]
-    private(set) var activeID: UUID
+    private var collection: TabCollection
+    var spaces: [Space] { collection.spaces }
+    var currentSpaceID: UUID { collection.currentSpaceID }
+    var tabs: [TabItem] { collection.tabs }
+    /// The collection always holds a tab (closing a space's last one leaves a fresh blank).
+    var activeID: UUID { collection.activeID ?? collection.tabs[0].id }
     /// The second pane in Split View (iPad and other wide windows). Not saved: a relaunch starts unsplit.
     private(set) var splitID: UUID?
-    /// Recently closed tabs, newest last, for Reopen Closed Tab.
-    private(set) var closedTabs: [TabItem] = []
     /// Per-website choices (zoom, dark mode, JavaScript, ads), sealed on disk; shared by every window.
     let sites: SiteSettings
-    @ObservationIgnored private var lastActive: [UUID: UUID] = [:]
     @ObservationIgnored private let storage: SessionStorage?
     /// Private tabs: their own non-persistent web data store, never saved, never offered for reopening.
     private(set) var privateIDs: Set<UUID> = []
@@ -26,11 +25,9 @@ final class BrowserModel {
     init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil, sites: SiteSettings = SiteSettings(directory: nil)) {
         self.storage = storage
         self.sites = sites
-        self.spaces = spaces
-        currentSpaceID = spaces[0].id
-        let first = TabItem(spaceID: spaces[0].id)
-        tabs = [first]
-        activeID = first.id
+        var collection = TabCollection(spaces: spaces)
+        collection.create(url: nil)
+        self.collection = collection
     }
 
     /// Replaces the fresh state with the saved session (when "Restore tabs on launch" is on), unless the user
@@ -41,18 +38,15 @@ final class BrowserModel {
     }
 
     func apply(_ saved: TabSession) {
-        spaces = saved.spaces
-        currentSpaceID = saved.currentSpaceID
-        tabs = saved.tabs
-        activeID = saved.activeID
+        guard collection.restore(saved, asleep: false) else { return }
         splitID = nil
     }
 
     /// True once the fresh single tab has been used, so a late restore can't clobber it.
     private var touched: Bool { tabs.count != 1 || tabs[0].url != nil }
 
-    var currentSpace: Space { spaces.first { $0.id == currentSpaceID } ?? spaces[0] }
-    var active: TabItem { tabs.first { $0.id == activeID } ?? tabs[0] }
+    var currentSpace: Space { collection.currentSpace }
+    var active: TabItem { collection.active ?? collection.tabs[0] }
     var pinnedTabs: [TabItem] { tabs.filter { $0.spaceID == currentSpaceID && $0.isPinned } }
     var regularTabs: [TabItem] { tabs.filter { $0.spaceID == currentSpaceID && !$0.isPinned } }
     func count(in space: Space) -> Int { tabs.filter { $0.spaceID == space.id }.count }
@@ -70,70 +64,60 @@ final class BrowserModel {
     var currentSpaceTabs: [TabItem] { pinnedTabs + regularTabs }
 
     func newTab() {
-        let tab = TabItem(spaceID: currentSpaceID)
-        tabs.append(tab)
-        activate(tab.id)
+        collection.create(url: nil)
+        scheduleSave()
     }
 
     func isPrivate(_ id: UUID) -> Bool { privateIDs.contains(id) }
 
     func newPrivateTab() {
-        let tab = TabItem(spaceID: currentSpaceID)
-        privateIDs.insert(tab.id)
-        tabs.append(tab)
-        activate(tab.id)
+        privateIDs.insert(collection.create(url: nil).id)
+        scheduleSave()
     }
 
     /// Opens a page in a new tab next to the others (links from other apps, "Open in New Tab").
     func open(_ url: URL, activate makeActive: Bool = true) {
-        let tab = TabItem(spaceID: currentSpaceID, url: url)
-        tabs.append(tab)
-        if makeActive { activate(tab.id) } else { scheduleSave() }
+        collection.create(url: url, activate: makeActive)
+        scheduleSave()
     }
 
     func duplicate(_ id: UUID) {
-        guard let tab = tabs.first(where: { $0.id == id }), let index = tabs.firstIndex(of: tab) else { return }
-        let copy = TabItem(spaceID: tab.spaceID, url: tab.url, title: tab.title)
-        tabs.insert(copy, at: index + 1)
-        activate(copy.id)
+        collection.duplicate(id)
+        scheduleSave()
     }
 
     func move(_ id: UUID, to space: Space) {
-        guard spaces.contains(where: { $0.id == space.id }) else { return }
-        update(id) { $0.spaceID = space.id; $0.isPinned = false }
-        if !tabs.contains(where: { $0.spaceID == currentSpaceID }) { tabs.append(TabItem(spaceID: currentSpaceID)) }
-        if !tabs.contains(where: { $0.id == activeID && $0.spaceID == currentSpaceID }) {
-            activate(tabs.first { $0.spaceID == currentSpaceID }!.id)
-        }
+        collection.moveTab(id, toSpace: space.id, unpin: true)
+        if collection.visibleTabs.isEmpty { collection.create(url: nil) }
+        scheduleSave()
     }
 
     /// Reorders the unpinned tabs of the current space (drag and drop in the sidebar).
     func moveRegularTabs(from source: IndexSet, to destination: Int) {
         var visible = regularTabs
         visible.move(fromOffsets: source, toOffset: destination)
-        let slots = tabs.indices.filter { tabs[$0].spaceID == currentSpaceID && !tabs[$0].isPinned }
-        for (slot, tab) in zip(slots, visible) { tabs[slot] = tab }
+        let slots = collection.tabs.indices.filter { collection.tabs[$0].spaceID == currentSpaceID && !collection.tabs[$0].isPinned }
+        // Place each tab at its slot, front to back: a tab always comes from a later slot, so earlier ones stay put.
+        for (slot, tab) in zip(slots, visible) where collection.tabs[slot].id != tab.id { collection.move(tab.id, to: slot) }
         scheduleSave()
     }
 
     func closeBelow(_ id: UUID) {
         let list = regularTabs
         guard let index = list.firstIndex(where: { $0.id == id }) else { return }
-        let doomed = Set(list[(index + 1)...].map(\.id))
-        remember(tabs.filter { doomed.contains($0.id) })
-        tabs.removeAll { doomed.contains($0.id) }
-        if let other = splitID, doomed.contains(other) || doomed.contains(activeID) { splitID = nil }
-        if doomed.contains(activeID) { activate(id) }
+        let doomed = list[(index + 1)...].map(\.id)
+        let activeDoomed = doomed.contains(activeID)
+        closeTabs(doomed)
+        if let other = splitID, doomed.contains(other) || activeDoomed { splitID = nil }
+        if activeDoomed { activate(id) }
         scheduleSave()
     }
 
     func reopenClosedTab() {
-        guard var tab = closedTabs.popLast() else { return }
-        if !spaces.contains(where: { $0.id == tab.spaceID }) { tab.spaceID = currentSpaceID }
-        tabs.append(tab)
-        select(tab.id)
+        guard collection.reopenClosed() != nil else { return }
+        scheduleSave()
     }
-    var canReopen: Bool { !closedTabs.isEmpty }
+    var canReopen: Bool { !collection.recentlyClosed.isEmpty }
 
     /// ⌘1–⌘8 pick the nth tab, ⌘9 the last one.
     func selectTab(number: Int) {
@@ -182,68 +166,57 @@ final class BrowserModel {
     }
 
     func select(_ id: UUID) {
-        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        guard let tab = collection.tab(id) else { return }
         if tab.spaceID != currentSpaceID { splitID = nil }
-        currentSpaceID = tab.spaceID
         activate(id)
     }
 
     func selectSpace(_ id: UUID) {
         guard spaces.contains(where: { $0.id == id }) else { return }
         if id != currentSpaceID { splitID = nil }
-        currentSpaceID = id
-        if let remembered = lastActive[id], tabs.contains(where: { $0.id == remembered }) {
-            activeID = remembered
-            scheduleSave()
-        } else if let first = tabs.first(where: { $0.spaceID == id }) {
-            activeID = first.id
-            scheduleSave()
-        } else {
-            newTab()
-        }
+        collection.switchSpace(to: id)
+        if collection.visibleTabs.isEmpty { collection.create(url: nil) }
+        scheduleSave()
     }
 
-    func togglePin(_ id: UUID) { update(id) { $0.isPinned.toggle() } }
+    func togglePin(_ id: UUID) {
+        guard let tab = collection.tab(id) else { return }
+        collection.setPinned(id, !tab.isPinned)
+        scheduleSave()
+    }
 
     func rename(_ space: Space, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let index = spaces.firstIndex(where: { $0.id == space.id }) else { return }
-        spaces[index].name = String(trimmed.prefix(24))
+        guard !trimmed.isEmpty, var changed = spaces.first(where: { $0.id == space.id }) else { return }
+        changed.name = String(trimmed.prefix(24))
+        collection.updateSpace(changed)
         scheduleSave()
     }
 
     func recolor(_ space: Space, to colorHex: String) {
-        guard let index = spaces.firstIndex(where: { $0.id == space.id }) else { return }
-        spaces[index].colorHex = colorHex
+        guard var changed = spaces.first(where: { $0.id == space.id }) else { return }
+        changed.colorHex = colorHex
+        collection.updateSpace(changed)
         scheduleSave()
     }
 
     /// Closing a space's last tab leaves a fresh empty one, so there is always something to show.
     func close(_ id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        let space = tabs[index].spaceID
-        if !privateIDs.contains(id) { remember([tabs[index]]) }
-        forgetPrivate([id])
+        guard collection.tab(id) != nil else { return }
+        let wasActive = id == activeID
+        let other = splitID
         if splitID == id { splitID = nil }
-        tabs.remove(at: index)
-        if !tabs.contains(where: { $0.spaceID == space }) { tabs.append(TabItem(spaceID: space)) }
-        if id == activeID, let other = splitID, other != id { splitID = nil; activate(other) }
-        else if id == activeID {
-            let sameSpace = tabs.filter { $0.spaceID == space }
-            let next = sameSpace.last { tabs.firstIndex(of: $0)! < index } ?? sameSpace[0]
-            activate(next.id)
-        }
+        collection.close(id, then: .above, keepSpaceNonEmpty: true, remember: !privateIDs.contains(id))
+        forgetPrivate([id])
+        if wasActive, let other, other != id { splitID = nil; activate(other) }
         scheduleSave()
     }
 
     /// Closes every unpinned tab in the current space except `keep`.
     func closeOthers(keeping keep: UUID) {
-        let closing = tabs.filter { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep }
-        remember(closing.filter { !privateIDs.contains($0.id) })
-        forgetPrivate(closing.map(\.id))
+        closeTabs(regularTabs.map(\.id).filter { $0 != keep })
         splitID = nil
-        tabs.removeAll { $0.spaceID == currentSpaceID && !$0.isPinned && $0.id != keep }
-        if tabs.contains(where: { $0.id == keep }) { activate(keep) } else { select(tabs.first { $0.spaceID == currentSpaceID }?.id ?? active.id) }
+        if collection.tab(keep) != nil { activate(keep) } else { select(collection.visibleTabs.first?.id ?? activeID) }
     }
 
     /// Called by the web view as the page navigates.
@@ -264,10 +237,9 @@ final class BrowserModel {
 
     /// What is saved: private tabs are left out, and the selection falls back to a saved tab.
     var snapshot: TabSession {
-        var saved = tabs.filter { !privateIDs.contains($0.id) }
-        if saved.isEmpty { saved = [TabItem(spaceID: currentSpaceID)] }
-        let selected = saved.contains { $0.id == activeID } ? activeID : (saved.first { $0.spaceID == currentSpaceID } ?? saved[0]).id
-        return TabSession(spaces: spaces, tabs: saved, activeID: selected, currentSpaceID: currentSpaceID)
+        if let saved = collection.session(excluding: privateIDs, keepingBlankTabs: true) { return saved }
+        let blank = TabItem(spaceID: currentSpaceID)
+        return TabSession(spaces: spaces, tabs: [blank], activeID: blank.id, currentSpaceID: currentSpaceID)
     }
 
     /// Drops private state: when the last private tab goes, its cookies and storage go with it.
@@ -277,21 +249,20 @@ final class BrowserModel {
         if privateIDs.isEmpty { PrivateBrowsing.reset() }
     }
 
-    private func remember(_ closed: [TabItem]) {
-        closedTabs.append(contentsOf: closed.filter { $0.url != nil })
-        if closedTabs.count > 20 { closedTabs.removeFirst(closedTabs.count - 20) }
+    /// Closes tabs one by one (private ones are never remembered for reopening).
+    private func closeTabs(_ ids: [UUID]) {
+        for id in ids { collection.close(id, remember: !privateIDs.contains(id)) }
+        forgetPrivate(ids)
     }
 
     private func activate(_ id: UUID) {
         if splitID == id { splitID = activeID } // choosing the other pane just moves focus
-        activeID = id
-        lastActive[currentSpaceID] = id
+        collection.activate(id)
         scheduleSave()
     }
 
     private func update(_ id: UUID, _ change: (inout TabItem) -> Void) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        change(&tabs[index])
+        collection.update(id, change)
         scheduleSave()
     }
 
