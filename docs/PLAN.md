@@ -9,7 +9,7 @@ Developer Program exists (device builds, TestFlight, App Store, iOS extensions o
 |---|---|---|---|
 | 1 | App skeleton: one `WKWebView`, address bar (LilyKit `URLResolver` + `HTTPSFirst`), tab list, CI | LilyKit 0.1.0 | **done** |
 | 2 | Tabs: spaces, pinned, card-grid overview with in-memory thumbnails, restore on launch, Settings (theme, accent, search engine, privacy toggles, spaces) | | **done** (session is sealed with a Keychain key since 2b) |
-| 2b | Shared tab model, sealed session, hibernation, thousands of tabs | LilyKit 0.2.0 | model and sealed session **done**; hibernation (web view only for visible tab, `TabSleepPolicy`) next |
+| 2b | Shared tab model, sealed session, hibernation, thousands of tabs | LilyKit 0.2.0 | model, sealed session and `TabCollection` **done** (LilyKit 0.3.x); a web view exists only for the visible tab, so tabs hibernate by design (`TabSleepPolicy` is not needed on iOS) |
 | 3 | Privacy core: content blocking via `WKContentRuleList` from LilyKit's converted rules; tracking-parameter stripping; per-site settings; private tabs (non-persistent store) | LilyKit ad-block, `SiteSettings` | ad and tracker blocking (built-in + filter lists, Settings) **done**; per-site settings, private tabs **done**, tracking-parameter stripping (done) |
 | 4 | Library: history, bookmarks, downloads, find in page, share sheet, reader-style start page | LilyKit `History`, `Bookmarks` | |
 | 5 | Assistant (Ollama on the LAN / Mac), command palette | LilyKit `Agent` | |
@@ -29,6 +29,9 @@ Developer Program exists (device builds, TestFlight, App Store, iOS extensions o
   goes to LilyKit first (PR there, tag, bump the exact pin here).
 - A web view exists only for the visible tab; other tabs are `TabItem` metadata (milestone 1 already works this way).
 - No analytics, no network except the user's page loads; secrets in the Keychain only.
+
+## Security
+Test plan (static, simulator and jailbroken-device passes): [`SECURITY-TEST-PLAN.md`](SECURITY-TEST-PLAN.md).
 
 ## Working here
 `brew install xcodegen`, then `make test` (generates `Lily.xcodeproj` from `project.yml`, builds, tests on the simulator)

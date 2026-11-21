@@ -1,20 +1,35 @@
 # Lily for iOS
 
-The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, privacy-first WebKit browser. **Status: skeleton** — one web view, address bar, tab list; see [`docs/PLAN.md`](docs/PLAN.md) for the milestones.
+The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, privacy-first WebKit browser.
+**Status: early, runs in the simulator and on your own device** (free Apple ID, see [`docs/DEVICE.md`](docs/DEVICE.md)).
+TestFlight and the App Store wait for the paid Apple Developer Program. Milestones: [`docs/PLAN.md`](docs/PLAN.md).
+
+## What works today
+
+- **Tabs and spaces:** pinned and regular tabs, spaces with their own tabs, a card-grid tab overview, drag to reorder, reopen closed tabs, duplicate, move to a space. Only the visible tab has a web view; the rest are metadata, so thousands of tabs are cheap.
+- **iPhone and iPad:** one app, two layouts by size class: a bottom bar that slides away while you read (compact), and the Mac's sidebar with Split View, a menu bar with the Mac's shortcuts, find in page and extra windows (regular).
+- **Privacy:** ad and tracker blocking through `WKContentRuleList` (EasyList and EasyPrivacy on by default, more in Settings), HTTPS-first, tracking-parameter removal, per-site settings (zoom, dark mode, JavaScript, ads), and private tabs on a non-persistent data store that is never saved or offered for reopening.
+- **Saved session:** sealed with a Keychain key (LilyKit `TabSessionStore`), so addresses that carry tokens never touch disk in plaintext.
+- The Lily mark as app icon (light, dark and tinted).
+
+Not planned on iOS: the assistant, Little Lily and pointer hover states.
 
 ## How it's built
 
-- A SwiftUI shell over **WebKit** (`WKWebView`), sharing all platform-neutral logic with [Lily-macos](https://github.com/Lily-browser/Lily-macos) through **LilyKit**: sealed storage and the Keychain key store, history/bookmarks/site settings, page IPC, ad-block rule conversion, migration readers, the assistant client, extension manifest/audit logic.
-- iOS-only here: the UI (tab switcher, address bar, share sheet), `WKContentRuleList` wiring, iOS web extension hosting (`WKWebExtensionController`, iOS 18.4+), Handoff with the Mac app, App Store/TestFlight packaging.
-- Deployment target iOS 18. No Electron/web wrappers; no analytics; nothing leaves the device except the user's own page loads (see [PRIVACY](https://github.com/Lily-browser/Lily-macos/blob/main/docs/PRIVACY.md)).
+- A SwiftUI shell over **WebKit** (`WKWebView`). Everything with no UI is in [LilyKit](https://github.com/Lily-browser/LilyKit), shared with [Lily-macos](https://github.com/Lily-browser/Lily-macos): the tab model (`TabCollection`), sealed storage and the Keychain key store, site settings, ad-block rule conversion, URL resolution. `BrowserModel` is a thin layer over `TabCollection`, so tab rules behave the same as on the Mac.
+- iOS-only here (`Sources/`): the views (`UI/`), the web view and its lifecycle (`Browser/`), commands and the app entry (`App/`).
+- LilyKit is pinned to an exact tag in `project.yml`; a kit change reaches this app only through a reviewed bump.
+- Deployment target iOS 18. No Electron or web wrappers, no analytics; nothing leaves the device except your page loads and filter-list downloads (see [PRIVACY](https://github.com/Lily-browser/Lily-macos/blob/main/docs/PRIVACY.md)).
 
-## First milestones
+## Development
 
-1. ~~Xcode project that depends on a pinned LilyKit tag and shows a `WKWebView` with an address field.~~ Done (`make test`).
-2. Tabs (metadata-first, web views only for visible tabs) and spaces, backed by LilyKit's stores.
-3. Content blocking from LilyKit's converted rules; HTTPS-first and tracking-parameter stripping.
-4. Extensions and Handoff.
+```sh
+brew install xcodegen
+make lint     # static security checks (scripts/security-lint.sh)
+make test     # generate Lily.xcodeproj from project.yml, build, test on the simulator
+make device   # run on your own iPhone (docs/DEVICE.md)
+```
 
-Your own device works with a free Apple ID (docs/DEVICE.md). TestFlight and the App Store need the paid Apple Developer Program.
+The `.xcodeproj` is generated and not committed. Engineering rules: [`CLAUDE.md`](CLAUDE.md). Security testing: [`docs/SECURITY-TEST-PLAN.md`](docs/SECURITY-TEST-PLAN.md).
 
-See [`CLAUDE.md`](CLAUDE.md) for the engineering rules. Licensed under GPL-3.0-only (see `LICENSE`).
+Licensed under GPL-3.0-only (see `LICENSE`).
