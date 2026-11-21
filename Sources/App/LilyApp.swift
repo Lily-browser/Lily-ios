@@ -19,7 +19,7 @@ private struct WindowRoot: View {
         if let model {
             BrowserView(model: model)
         } else {
-            Color(.systemBackground).ignoresSafeArea().onAppear(perform: makeModel)
+            Color(.systemBackground).ignoresSafeArea().task { await Blocking.prepare(); makeModel() }
         }
     }
 
