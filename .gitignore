@@ -8,3 +8,4 @@ DerivedData/
 *.xcodeproj/
 DerivedData/
 build/
+Config/Local.xcconfig
