@@ -36,9 +36,6 @@ struct RealWorldTests {
         Blocking.configure(plain)
         await plainProbe.load(plain, page)
 
-        print("CONTROL ad:", controlProbe.failure?.domain ?? "ok", controlProbe.failure?.code ?? 0)
-        print("BLOCKED ad:", blockedProbe.failure?.domain ?? "ok", blockedProbe.failure?.code ?? 0, blockedProbe.failure?.localizedDescription ?? "")
-        print("PLAIN example.com:", plainProbe.failure?.domain ?? "ok", plainProbe.failure?.code ?? 0)
         #expect(blockedProbe.failure != nil)
         #expect(blockedProbe.failure?.code != controlProbe.failure?.code || controlProbe.failure == nil)
         #expect(plainProbe.failure == nil)
@@ -51,7 +48,6 @@ struct RealWorldTests {
         let model = BrowserModel()
         await store.save(model.snapshot)
         let loaded = await store.load()
-        print("KEYCHAIN loaded:", loaded != nil)
         #expect(loaded == model.snapshot)
     }
 }
