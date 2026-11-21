@@ -7,12 +7,15 @@ packages:
   LilyKit:
     url: https://github.com/Lily-browser/LilyKit.git
     exactVersion: 0.1.0
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
 settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    CODE_SIGNING_ALLOWED: NO # simulator builds only until the Developer Program is bought
+    CODE_SIGN_STYLE: Automatic # simulator needs no team; a free Apple ID (Personal Team) is enough for your own device
 targets:
   Lily:
     type: application
@@ -31,7 +34,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.lily.browser.ios
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lily.browser.ios # overridable in Config/Local.xcconfig
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
   LilyTests:

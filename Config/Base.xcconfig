@@ -1,0 +1,2 @@
+// Optional per-developer settings (gitignored): copy Config/Local.xcconfig.example to Config/Local.xcconfig.
+#include? "Local.xcconfig"

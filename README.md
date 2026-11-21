@@ -15,6 +15,6 @@ The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, pr
 3. Content blocking from LilyKit's converted rules; HTTPS-first and tracking-parameter stripping.
 4. Extensions and Handoff.
 
-Device builds, TestFlight and the App Store need a paid Apple Developer Program membership (the same blocker as notarization for the Mac app); the simulator doesn't.
+Your own device works with a free Apple ID (docs/DEVICE.md). TestFlight and the App Store need the paid Apple Developer Program.
 
 See [`CLAUDE.md`](CLAUDE.md) for the engineering rules. Licensed under GPL-3.0-only (see `LICENSE`).

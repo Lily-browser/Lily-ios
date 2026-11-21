@@ -20,7 +20,7 @@ Native iOS app: Swift + SwiftUI, WebKit (`WKWebView`) only. Shares platform-neut
 - Tabs: metadata-first `struct TabItem`, web views only for visible tabs, hibernate idle tabs; must handle thousands of tabs.
 
 ## Build and gates
-Simulator builds need no Apple account; device/TestFlight need the paid Developer Program (not bought yet). Gates before a PR: lint, unit tests, simulator build.
+Simulator builds need no Apple account; device/TestFlight need a free Apple ID (docs/DEVICE.md); TestFlight/App Store need the paid program (not bought yet). Gates before a PR: lint, unit tests, simulator build.
 
 ## Git
 On `main`, branch first (`feature/…`, `fix/…`). Conventional, atomic, signed commits. When done: push and open the PR to `main` automatically.
