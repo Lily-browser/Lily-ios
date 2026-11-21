@@ -2,8 +2,8 @@ import Foundation
 import LilyKit
 import Observation
 
-/// Spaces, their tabs and what's selected. Platform-neutral logic belongs in LilyKit (issue #3 plans to
-/// share the tab model); this holds the iOS state the views need.
+/// Spaces, their tabs and what's selected. The tab model and session storage are LilyKit's; this holds the
+/// iOS state the views need.
 @MainActor @Observable
 final class BrowserModel {
     private(set) var spaces: [Space]
@@ -17,26 +17,36 @@ final class BrowserModel {
     /// Page zoom remembered per website for this run (through the same steps as the Mac).
     private var zooms: [String: Double] = [:]
     @ObservationIgnored private var lastActive: [UUID: UUID] = [:]
-    @ObservationIgnored private let file: SessionFile?
+    @ObservationIgnored private let storage: SessionStorage?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
-    /// With a `file`, the previous session is restored (when "Restore tabs on launch" is on) and every
-    /// change is saved shortly after it happens.
-    init(spaces: [Space] = Space.defaults, file: SessionFile? = nil) {
-        self.file = file
-        if Preferences.restoresSession, let saved = file?.load() {
-            self.spaces = saved.spaces
-            currentSpaceID = saved.currentSpaceID
-            tabs = saved.tabs
-            activeID = saved.tabs.contains { $0.id == saved.activeID } ? saved.activeID : saved.tabs[0].id
-            return
-        }
+    /// With `storage`, every change is saved shortly after it happens. Call `restore()` to bring back the last session.
+    init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil) {
+        self.storage = storage
         self.spaces = spaces
         currentSpaceID = spaces[0].id
         let first = TabItem(spaceID: spaces[0].id)
         tabs = [first]
         activeID = first.id
     }
+
+    /// Replaces the fresh state with the saved session (when "Restore tabs on launch" is on), unless the user
+    /// has already started browsing.
+    func restore() async {
+        guard Preferences.restoresSession, let saved = await storage?.load(), !touched else { return }
+        apply(saved)
+    }
+
+    func apply(_ saved: TabSession) {
+        spaces = saved.spaces
+        currentSpaceID = saved.currentSpaceID
+        tabs = saved.tabs
+        activeID = saved.activeID
+        splitID = nil
+    }
+
+    /// True once the fresh single tab has been used, so a late restore can't clobber it.
+    private var touched: Bool { tabs.count != 1 || tabs[0].url != nil }
 
     var currentSpace: Space { spaces.first { $0.id == currentSpaceID } ?? spaces[0] }
     var active: TabItem { tabs.first { $0.id == activeID } ?? tabs[0] }
@@ -237,8 +247,8 @@ final class BrowserModel {
             .prefix(5).map { $0 }
     }
 
-    var snapshot: SessionSnapshot {
-        SessionSnapshot(spaces: spaces, tabs: tabs, activeID: activeID, currentSpaceID: currentSpaceID)
+    var snapshot: TabSession {
+        TabSession(spaces: spaces, tabs: tabs, activeID: activeID, currentSpaceID: currentSpaceID)
     }
 
     private func remember(_ closed: [TabItem]) {
@@ -261,13 +271,13 @@ final class BrowserModel {
 
     /// Coalesces bursts of changes into one write shortly after the last.
     private func scheduleSave() {
-        guard let file else { return }
+        guard let storage else { return }
         saveTask?.cancel()
         let snapshot = snapshot
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-            await Task.detached { file.write(snapshot) }.value
+            await storage.save(snapshot)
         }
     }
 }
