@@ -56,6 +56,7 @@ struct WebView: UIViewRepresentable {
     let snapshots: SnapshotCache
     var zoom: Double = 1
     var site: SiteSettings.Site = SiteSettings.Site()
+    var isPrivate = false
     let onChange: @MainActor (UUID, URL?, String?) -> Void
     var onOpen: @MainActor (URL) -> Void = { _ in }
 
@@ -69,6 +70,7 @@ struct WebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = site.javaScript ?? true
+        if isPrivate { configuration.websiteDataStore = PrivateBrowsing.store }
         let web = WKWebView(frame: .zero, configuration: configuration)
         Blocking.configure(web, adsAllowed: site.adsAllowed ?? false)
         web.overrideUserInterfaceStyle = Self.style(site.darkMode)

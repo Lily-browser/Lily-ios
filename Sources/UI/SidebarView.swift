@@ -61,6 +61,7 @@ struct SidebarView: View {
                 SiteBadge(tab: tab, size: 24)
                 Text(tab.displayTitle).font(.body).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
+                if model.isPrivate(tab.id) { Image(systemName: "eye.slash").font(.caption).foregroundStyle(.secondary).accessibilityLabel("Private") }
             }
             .padding(.horizontal, 10).frame(minHeight: 44)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -68,7 +69,7 @@ struct SidebarView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(tab.displayTitle)
+        .accessibilityLabel(model.isPrivate(tab.id) ? "\(tab.displayTitle), private" : tab.displayTitle)
         .accessibilityAddTraits(active ? .isSelected : [])
         .swipeActions(edge: .trailing) { Button("Close", role: .destructive) { snapshots.remove(tab.id); model.close(tab.id) } }
         .swipeActions(edge: .leading) { Button("Pin") { model.togglePin(tab.id) }.tint(Color(hex: accentHex)) }

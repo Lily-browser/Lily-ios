@@ -42,3 +42,43 @@ struct SiteSettingsTests {
         #expect(WebView.style(model.sites.site(for: url).darkMode) == .dark)
     }
 }
+
+@MainActor
+struct PrivateTabTests {
+    @Test func privateTabsAreNeverSavedOrReopened() {
+        let model = BrowserModel()
+        model.newPrivateTab()
+        let id = model.activeID
+        model.pageChanged(id, url: URL(string: "https://secret.example/?t=1"), title: "Secret")
+        #expect(model.isPrivate(id))
+        #expect(!model.snapshot.tabs.contains { $0.id == id })
+        #expect(model.snapshot.isValid && model.snapshot.activeID != id)
+        model.close(id)
+        #expect(!model.canReopen && !model.isPrivate(id))
+    }
+
+    @Test func closingTheLastPrivateTabReplacesTheDataStore() {
+        let model = BrowserModel()
+        let before = PrivateBrowsing.store
+        model.newPrivateTab(); model.newPrivateTab()
+        model.close(model.activeID)
+        #expect(PrivateBrowsing.store === before)
+        model.close(model.activeID)
+        #expect(PrivateBrowsing.store !== before)
+    }
+
+    @Test func aPrivateOnlySessionStillSavesAnEmptyTab() {
+        let model = BrowserModel()
+        model.newPrivateTab()
+        model.close(model.tabs.first { !model.isPrivate($0.id) }!.id)
+        #expect(model.snapshot.isValid)
+    }
+}
+
+@MainActor
+struct PrivateStoreTests {
+    @Test func theStoreIsInMemoryOnly() {
+        #expect(!PrivateBrowsing.store.isPersistent)
+        #expect(WKWebsiteDataStore.default().isPersistent)
+    }
+}
