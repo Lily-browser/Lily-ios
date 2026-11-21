@@ -9,7 +9,7 @@ Developer Program exists (device builds, TestFlight, App Store, iOS extensions o
 |---|---|---|---|
 | 1 | App skeleton: one `WKWebView`, address bar (LilyKit `URLResolver` + `HTTPSFirst`), tab list, CI | LilyKit 0.1.0 | **done** |
 | 2 | Tabs: spaces, pinned, card-grid overview with in-memory thumbnails, restore on launch, Settings (theme, accent, search engine, privacy toggles, spaces) | | **done** (session is sealed with a Keychain key since 2b) |
-| 2b | Shared tab model, sealed session, hibernation, thousands of tabs | LilyKit 0.2.0 | model and sealed session **done**; hibernation (web view only for visible tab, `TabSleepPolicy`) next |
+| 2b | Shared tab model, sealed session, hibernation, thousands of tabs | LilyKit 0.2.0 | model and sealed session **done**; hibernation is inherent (only the visible tab and the split pane have a web view, the rest are metadata) and `lastActivated` is tracked; `TabSleepPolicy` is for the Mac. Thousands-of-tabs check still to do |
 | 3 | Privacy core: content blocking via `WKContentRuleList` from LilyKit's converted rules; tracking-parameter stripping; per-site settings; private tabs (non-persistent store) | LilyKit ad-block, `SiteSettings` | |
 | 4 | Library: history, bookmarks, downloads, find in page, share sheet, reader-style start page | LilyKit `History`, `Bookmarks` | |
 | 5 | Assistant (Ollama on the LAN / Mac), command palette | LilyKit `Agent` | |
