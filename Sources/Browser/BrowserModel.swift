@@ -260,7 +260,7 @@ final class BrowserModel {
         if splitID == id { splitID = activeID } // choosing the other pane just moves focus
         activeID = id
         lastActive[currentSpaceID] = id
-        scheduleSave()
+        update(id) { $0.lastActivated = Date() }
     }
 
     private func update(_ id: UUID, _ change: (inout TabItem) -> Void) {
