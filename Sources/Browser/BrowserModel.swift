@@ -55,6 +55,7 @@ final class BrowserModel {
     /// tracking parameters removed) or a search with the chosen engine. Both follow Settings.
     func go(to input: String) {
         guard var url = Preferences.urlResolver.resolve(input) else { return }
+        guard NavigationPolicy.isLoadable(url) else { return } // no file:, data: or other schemes from the address bar
         if Preferences.httpsFirstEnabled { url = HTTPSFirst.upgrade(url) ?? url }
         if Preferences.flag(Preferences.Key.removeLinkTracking, default: true) { url = LinkTracking.cleaned(url) }
         update(activeID) { $0.url = url }
@@ -77,6 +78,7 @@ final class BrowserModel {
 
     /// Opens a page in a new tab next to the others (links from other apps, "Open in New Tab").
     func open(_ url: URL, activate makeActive: Bool = true) {
+        guard NavigationPolicy.isLoadable(url) else { return }
         collection.create(url: url, activate: makeActive)
         scheduleSave()
     }
