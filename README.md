@@ -1,7 +1,7 @@
 # Lily for iOS
 
 The iPhone and iPad app of [Lily](https://github.com/Lily-browser), a native, privacy-first WebKit browser.
-**Status: early, runs in the simulator and on your own device** (free Apple ID, see [`docs/DEVICE.md`](docs/DEVICE.md)).
+**Status: 1.0, source release. It runs in the simulator and on your own devices** (free Apple ID, see [`docs/DEVICE.md`](docs/DEVICE.md)); there is no App Store or TestFlight build yet.
 TestFlight and the App Store wait for the paid Apple Developer Program. Milestones: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## What works today
