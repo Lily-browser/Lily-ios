@@ -19,13 +19,13 @@ private struct WindowRoot: View {
         if let model {
             BrowserView(model: model)
         } else {
-            Color(.systemBackground).ignoresSafeArea().task { await Blocking.prepare(); makeModel() }
+            Color(.systemBackground).ignoresSafeArea().task { await Blocking.prepare(); await Sites.load(); makeModel() }
         }
     }
 
     private func makeModel() {
         let primary = WindowSeed.claimPrimary()
-        let made = BrowserModel(storage: primary ? .standard : nil)
+        let made = BrowserModel(storage: primary ? .standard : nil, sites: Sites.shared)
         if primary { Task { await made.restore() } }
         if let url = WindowSeed.pending.first { WindowSeed.pending.removeFirst(); made.go(to: url.absoluteString) }
         model = made

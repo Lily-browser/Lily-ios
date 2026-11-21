@@ -14,15 +14,16 @@ final class BrowserModel {
     private(set) var splitID: UUID?
     /// Recently closed tabs, newest last, for Reopen Closed Tab.
     private(set) var closedTabs: [TabItem] = []
-    /// Page zoom remembered per website for this run (through the same steps as the Mac).
-    private var zooms: [String: Double] = [:]
+    /// Per-website choices (zoom, dark mode, JavaScript, ads), sealed on disk; shared by every window.
+    let sites: SiteSettings
     @ObservationIgnored private var lastActive: [UUID: UUID] = [:]
     @ObservationIgnored private let storage: SessionStorage?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     /// With `storage`, every change is saved shortly after it happens. Call `restore()` to bring back the last session.
-    init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil) {
+    init(spaces: [Space] = Space.defaults, storage: SessionStorage? = nil, sites: SiteSettings = SiteSettings(directory: nil)) {
         self.storage = storage
+        self.sites = sites
         self.spaces = spaces
         currentSpaceID = spaces[0].id
         let first = TabItem(spaceID: spaces[0].id)
@@ -143,12 +144,12 @@ final class BrowserModel {
 
     // MARK: Zoom
 
-    func zoom(for url: URL?) -> Double { SiteSettings.key(for: url).flatMap { zooms[$0] } ?? 1 }
+    func zoom(for url: URL?) -> Double { sites.zoom(for: url) }
     func zoomStep(for url: URL?, in zoomingIn: Bool) {
-        guard let key = SiteSettings.key(for: url) else { return }
-        zooms[key] = SiteSettings.zoomLevel(after: zoom(for: url), zoomingIn: zoomingIn)
+        let next = SiteSettings.zoomLevel(after: zoom(for: url), zoomingIn: zoomingIn)
+        sites.update(url) { $0.zoom = next }
     }
-    func resetZoom(for url: URL?) { if let key = SiteSettings.key(for: url) { zooms[key] = nil } }
+    func resetZoom(for url: URL?) { sites.update(url) { $0.zoom = nil } }
 
     // MARK: Split View
 

@@ -77,3 +77,14 @@ enum Blocking {
         }
     }
 }
+
+/// The one sealed site-settings store, shared by every window.
+@MainActor
+enum Sites {
+    static let shared = SiteSettings(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lily"))
+    private static var loading: Task<Void, Never>?
+    static func load() async {
+        if loading == nil { loading = Task { await shared.load() } }
+        await loading?.value
+    }
+}
