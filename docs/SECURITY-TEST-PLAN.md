@@ -144,7 +144,7 @@ in `Tests/` (or a LilyKit test when the cause is in the kit). Keep a table at th
 | 2026-11-21 | B-6 | Medium: a failed load or a bad certificate showed a blank page, and an HTTPS-first failure had no way forward | Fixed: error page; HTTP only after asking, never for certificate errors; redirect loops broken |
 | 2026-11-21 | B-8 | Medium: the app switcher snapshot and tab thumbnails could show a private page | Fixed: cover while inactive, no thumbnails for private tabs |
 | 2026-11-21 | B-10 | Low: JavaScript alert/confirm/prompt were silently dropped | Fixed: system dialogs naming the site, three per page load |
-| 2026-11-21 | A-5 | Low (LilyKit): filter-list size is checked after the whole body is downloaded | Open: lists come from fixed hosts, so this needs a compromised list host; stream with a cap |
+| 2026-11-21 | A-5 | Low (LilyKit): filter-list size is checked after the whole body is downloaded | Fixed in LilyKit 1.1.0 ([LilyKit #13](https://github.com/Lily-browser/LilyKit/pull/13)): the download streams and stops at the 15 MB cap. The iOS app gets it with the next LilyKit pin bump (now 1.0.0) |
 | 2026-11-21 | A-2 | Medium (regression I introduced): the library PR dropped the usage strings from `project.yml`; regenerating would have removed them | Fixed in #20, and lint now fails if any is missing |
 | 2026-11-21 | A-8 | Low: Dependabot and secret scanning off on this repo | Fixed: Dependabot alerts, secret scanning and push protection on (all three repos); Dependabot config for Actions pins added |
 
